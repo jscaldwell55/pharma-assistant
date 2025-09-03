@@ -37,3 +37,5 @@ gevent==23.9.1
 # Optional but recommended
 redis>=5.0.0  # For caching if you want to add Redis later
 pydantic>=2.0.0  # For data validation
+
+uvicorn[standard]
