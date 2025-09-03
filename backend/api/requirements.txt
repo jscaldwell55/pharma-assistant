@@ -12,3 +12,4 @@ anthropic>=0.18.0
 scikit-learn
 nltk
 langchain-text-splitters
+pinecone>=3.0.0
