@@ -47,7 +47,7 @@ Browser Extension ──► Flask API ──► Core Logic Package
     (State)           (server.py)     (conversational_agent.py)
                           │
                           ├─► RAG Retrieval + Knowledge Bridge
-                          ├─► Claude 3.5 Sonnet Generation  
+                          ├─► Claude 3.7 Sonnet Generation  
                           ├─► Multi-Layer Safety Guards
                           └─► Trace Export + Logging
 ```

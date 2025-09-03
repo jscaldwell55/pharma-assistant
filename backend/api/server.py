@@ -5,7 +5,7 @@ import logging
 from flask import Flask, request, jsonify, send_from_directory, send_file
 from flask_cors import CORS
 from dotenv import load_dotenv
-from dataclasses import asdict # <-- Add this import to convert the dataclass to a dictionary
+from dataclasses import asdict
 
 # --- CRITICAL: This makes imports from core_logic work ---
 # This adds the parent 'backend' directory to the Python path
@@ -27,9 +27,10 @@ logger = logging.getLogger("api_server")
 app = Flask(__name__)
 CORS(app) # Allows the browser extension to call this API
 
+# Global agent variable
+agent = None
+
 # === SINGLETON INITIALIZATION LOGIC ===
-# This logic runs only ONCE when the server starts.
-# It replaces the @st.cache_resource functionality from your app.py.
 def build_agent_singleton():
     logger.info("Initializing ConversationalAgent singleton...")
     vec = PineconeVectorClient(
@@ -48,10 +49,6 @@ def build_agent_singleton():
     logger.info("ConversationalAgent singleton created successfully.")
     return agent
 
-# Create the single, shared instance of your agent
-agent = build_agent_singleton()
-# =====================================
-
 # === STATIC FILE ROUTES ===
 @app.route('/')
 def serve_index():
@@ -63,33 +60,65 @@ def serve_static(filename):
     """Serve static files (CSS, JS, etc.)"""
     return send_from_directory('../../static', filename)
 
-# === API ENDPOINT ===
-@app.route('/api/chat', methods=['POST']) # <-- Renamed endpoint to be more descriptive
-def handle_chat(): # <-- Renamed function to match
+# === API ENDPOINTS ===
+@app.route('/api/rewrite', methods=['POST'])
+def handle_rewrite():
     """
-    This is the main API endpoint for the browser extension's chat UI.
-    It expects a JSON payload with 'text' (the user query) 
-    and 'history' (the conversation context).
+    Original endpoint for browser extension compatibility
     """
+    global agent
+    if agent is None:
+        logger.info("Loading agent on first request...")
+        agent = build_agent_singleton()
+    
     data = request.get_json()
     if not data or 'text' not in data:
         return jsonify({'error': 'No text provided'}), 400
 
     user_query = data['text']
-    # The extension will send the history; default to empty list if not provided
-    conversation_history = data.get('history', []) 
+    conversation_history = data.get('history', [])
 
     logger.info(f"Received query: '{user_query}' with {len(conversation_history)} turns in history.")
 
     try:
-        # Run the agent's handle method, passing in the history
         decision = asyncio.run(agent.handle(
             user_query=user_query,
             conversation_history=conversation_history
         ))
         
-        # --- MODIFIED: Return the full decision object as a dictionary ---
-        # This allows the extension's UI to access safety labels and trace info.
+        # Return just the response text for browser extension compatibility
+        return jsonify({'rewritten_text': decision.response_text})
+
+    except Exception as e:
+        logger.error(f"Error handling request: {e}", exc_info=True)
+        return jsonify({'error': 'An internal server error occurred.'}), 500
+
+@app.route('/api/chat', methods=['POST'])
+def handle_chat():
+    """
+    Enhanced endpoint that returns full decision object
+    """
+    global agent
+    if agent is None:
+        logger.info("Loading agent on first request...")
+        agent = build_agent_singleton()
+    
+    data = request.get_json()
+    if not data or 'text' not in data:
+        return jsonify({'error': 'No text provided'}), 400
+
+    user_query = data['text']
+    conversation_history = data.get('history', [])
+
+    logger.info(f"Received query: '{user_query}' with {len(conversation_history)} turns in history.")
+
+    try:
+        decision = asyncio.run(agent.handle(
+            user_query=user_query,
+            conversation_history=conversation_history
+        ))
+        
+        # Return the full decision object as a dictionary
         return jsonify(asdict(decision))
 
     except Exception as e:
@@ -97,5 +126,5 @@ def handle_chat(): # <-- Renamed function to match
         return jsonify({'error': 'An internal server error occurred.'}), 500
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 10000))  # Render uses port 10000 by default
     app.run(host='0.0.0.0', port=port, debug=False)
