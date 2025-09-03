@@ -3,6 +3,7 @@ const chatContainer = document.getElementById('chat-container');
 const chatForm = document.getElementById('chat-form');
 const chatInput = document.getElementById('chat-input');
 const newConversationBtn = document.getElementById('new-conversation-btn');
+const clearCacheBtn = document.getElementById('clear-cache-btn');
 const showTraceCheckbox = document.getElementById('show-trace-checkbox');
 const thinkingIndicator = document.getElementById('thinking-indicator');
 
@@ -137,9 +138,27 @@ function toggleTraceVisibility() {
     document.body.classList.toggle('show-traces', showTraceCheckbox.checked);
 }
 
+/**
+ * Clears cache and restarts the conversation.
+ */
+function clearCache() {
+    // Clear local storage (if any)
+    localStorage.clear();
+    sessionStorage.clear();
+    
+    // Clear chat history
+    chatHistory = [];
+    renderMessages();
+    
+    // Optional: You could add a call to server to clear server-side cache
+    // For now, just simulate cache clearing with page reload
+    alert('Cache cleared! Starting fresh conversation.');
+}
+
 // --- Event Listeners ---
 chatForm.addEventListener('submit', handleFormSubmit);
 newConversationBtn.addEventListener('click', startNewConversation);
+clearCacheBtn.addEventListener('click', clearCache);
 showTraceCheckbox.addEventListener('change', toggleTraceVisibility);
 
 // --- Initial Render ---
