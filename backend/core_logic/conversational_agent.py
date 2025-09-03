@@ -20,7 +20,7 @@ from .grounding import compute_grounding, passes_grounding
 try:
     from .llm_client import NO_CONTEXT_FALLBACK_MESSAGE
 except Exception:
-    NO_CONTEXT_FALLBACK_MESSAGE = "I'm sorry, I am unable to answer that. Can I assist you with something else?"
+    NO_CONTEXT_FALLBACK_MESSAGE = "I apologize, I don't seem to have that information. Can I assist you with something else?"
 
 logger = logging.getLogger("agent")
 

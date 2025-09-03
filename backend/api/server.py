@@ -53,12 +53,14 @@ def build_agent_singleton():
 @app.route('/')
 def serve_index():
     """Serve the main chat interface"""
-    return send_file('../../static/index.html')
+    static_dir = os.path.join(os.path.dirname(__file__), '../../static')
+    return send_file(os.path.join(static_dir, 'index.html'))
 
 @app.route('/static/<path:filename>')
 def serve_static(filename):
     """Serve static files (CSS, JS, etc.)"""
-    return send_from_directory('../../static', filename)
+    static_dir = os.path.join(os.path.dirname(__file__), '../../static')
+    return send_from_directory(static_dir, filename)
 
 # === API ENDPOINTS ===
 @app.route('/api/rewrite', methods=['POST'])

@@ -22,7 +22,7 @@ MAX_TOKENS = int(os.getenv("ANTHROPIC_MAX_TOKENS", "1000"))
 TEMPERATURE = float(os.getenv("ANTHROPIC_TEMPERATURE", "0.2"))
 NO_CONTEXT_FALLBACK_MESSAGE = os.getenv(
     "NO_CONTEXT_FALLBACK_MESSAGE",
-    "I'm sorry, I am unable to answer that. Can I assist you with something else?"
+    "I apologize, I don't seem to have that information. Can I assist you with something else?"
 )
 
 # Try to import project-level constants if they exist; env overrides still apply

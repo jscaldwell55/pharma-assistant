@@ -261,7 +261,7 @@ def passes_grounding(grounding_details: Dict[str, float]) -> bool:
 ```python
 # Hard Refusal for Ungrounded Content
 if not passes_grounding(grounding_details):
-    return "I'm sorry, I am unable to answer that. Can I assist you with something else?"
+    return "I apologize, I don't seem to have that information. Can I assist you with something else?"
     # No partial information, no hedging - complete refusal
 ```
 
