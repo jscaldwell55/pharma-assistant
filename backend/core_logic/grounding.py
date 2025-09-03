@@ -1,4 +1,4 @@
-# grounding.py – semantic grounding score & gate (embedding-based, no extra LLMs)
+# backend/core_logic/grounding.py
 import os
 import re
 import logging

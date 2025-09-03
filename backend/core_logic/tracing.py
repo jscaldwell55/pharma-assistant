@@ -1,4 +1,4 @@
-# tracing.py – JSONL trace export + console breadcrumb
+# backend/core_logic/tracing.py
 import os, json, logging
 from typing import Dict, Any
 from dataclasses import dataclass

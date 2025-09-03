@@ -1,4 +1,4 @@
-# llm_client.py - Claude 3.5 Sonnet Integration with Better Context Handling
+# backend/core_logic/llm_client.py
 # Compatible with ConversationalAgent (expects: await LLMClient.generate(system_prompt, context, user_query, conversation_history))
 import os
 import asyncio

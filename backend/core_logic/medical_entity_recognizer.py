@@ -1,4 +1,4 @@
-# medical_entity_recognizer.py - Medical Entity Recognition System
+# backend/core_logic/medical_entity_recognizer.py
 
 import logging
 import re

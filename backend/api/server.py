@@ -24,54 +24,91 @@ from core_logic.knowledge_bridge import PharmaceuticalKnowledgeBridge, EnhancedR
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("api_server")
 
-app = Flask(__name__)
-CORS(app) # Allows the browser extension to call this API
+app = Flask(__name__, static_folder='../../static')
+CORS(app) # Allows cross-origin requests
 
 # Global agent variable
 agent = None
 
 # === SINGLETON INITIALIZATION LOGIC ===
 def build_agent_singleton():
+    """Build the conversational agent with all components"""
     logger.info("Initializing ConversationalAgent singleton...")
-    vec = PineconeVectorClient(
-        index_name=os.getenv("PINECONE_INDEX"),
-        environment=os.getenv("PINECONE_ENVIRONMENT"),
-        api_key=os.getenv("PINECONE_API_KEY"),
-        namespace=os.getenv("PINECONE_NAMESPACE") or None,
-    )
-    logger.info("Vector client initialized for index: %s", vec.index_name)
     
-    base_retriever = RAGRetriever(vector_client=vec)
-    knowledge_bridge = PharmaceuticalKnowledgeBridge()
-    enhanced_retriever = EnhancedRAGRetriever(base_retriever, knowledge_bridge)
-    
-    agent = ConversationalAgent(retriever=enhanced_retriever)
-    logger.info("ConversationalAgent singleton created successfully.")
-    return agent
+    try:
+        # Initialize vector client
+        vec = PineconeVectorClient(
+            index_name=os.getenv("PINECONE_INDEX", "pharma-assistant"),
+            environment=os.getenv("PINECONE_ENVIRONMENT", "us-east-1"),
+            api_key=os.getenv("PINECONE_API_KEY"),
+            namespace=os.getenv("PINECONE_NAMESPACE") or None,
+        )
+        logger.info("Vector client initialized for index: %s", vec.index_name)
+        
+        # Build retrieval pipeline with knowledge bridge
+        base_retriever = RAGRetriever(vector_client=vec)
+        knowledge_bridge = PharmaceuticalKnowledgeBridge()
+        enhanced_retriever = EnhancedRAGRetriever(base_retriever, knowledge_bridge)
+        
+        # Create agent
+        agent = ConversationalAgent(retriever=enhanced_retriever)
+        logger.info("ConversationalAgent singleton created successfully.")
+        return agent
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize agent: {e}", exc_info=True)
+        raise
 
 # === STATIC FILE ROUTES ===
 @app.route('/')
 def serve_index():
     """Serve the main chat interface"""
-    static_dir = os.path.join(os.path.dirname(__file__), '../../static')
-    return send_file(os.path.join(static_dir, 'index.html'))
+    try:
+        # Get the absolute path to the static directory
+        static_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'static')
+        index_path = os.path.join(static_dir, 'index.html')
+        
+        if not os.path.exists(index_path):
+            logger.error(f"index.html not found at: {index_path}")
+            return jsonify({'error': 'Chat interface not found'}), 404
+            
+        return send_file(index_path)
+    except Exception as e:
+        logger.error(f"Error serving index: {e}", exc_info=True)
+        return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/static/<path:filename>')
 def serve_static(filename):
     """Serve static files (CSS, JS, etc.)"""
-    static_dir = os.path.join(os.path.dirname(__file__), '../../static')
-    return send_from_directory(static_dir, filename)
+    try:
+        static_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'static')
+        return send_from_directory(static_dir, filename)
+    except Exception as e:
+        logger.error(f"Error serving static file {filename}: {e}", exc_info=True)
+        return jsonify({'error': 'File not found'}), 404
 
 # === API ENDPOINTS ===
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """Health check endpoint for monitoring"""
+    return jsonify({'status': 'healthy', 'service': 'pharma-assistant'}), 200
+
 @app.route('/api/rewrite', methods=['POST'])
 def handle_rewrite():
     """
     Original endpoint for browser extension compatibility
+    Returns just the response text for backward compatibility
     """
     global agent
-    if agent is None:
-        logger.info("Loading agent on first request...")
-        agent = build_agent_singleton()
+    
+    try:
+        # Lazy load agent on first request
+        if agent is None:
+            logger.info("Loading agent on first request...")
+            agent = build_agent_singleton()
+    except Exception as e:
+        logger.error(f"Failed to initialize agent: {e}", exc_info=True)
+        return jsonify({'error': 'Service initialization failed'}), 503
     
     data = request.get_json()
     if not data or 'text' not in data:
@@ -80,13 +117,17 @@ def handle_rewrite():
     user_query = data['text']
     conversation_history = data.get('history', [])
 
-    logger.info(f"Received query: '{user_query}' with {len(conversation_history)} turns in history.")
+    logger.info(f"Received query: '{user_query[:100]}...' with {len(conversation_history)} turns in history.")
 
     try:
-        decision = asyncio.run(agent.handle(
+        # Run the async handler
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        decision = loop.run_until_complete(agent.handle(
             user_query=user_query,
             conversation_history=conversation_history
         ))
+        loop.close()
         
         # Return just the response text for browser extension compatibility
         return jsonify({'rewritten_text': decision.response_text})
@@ -99,11 +140,18 @@ def handle_rewrite():
 def handle_chat():
     """
     Enhanced endpoint that returns full decision object
+    Used by the web UI for rich interactions
     """
     global agent
-    if agent is None:
-        logger.info("Loading agent on first request...")
-        agent = build_agent_singleton()
+    
+    try:
+        # Lazy load agent on first request
+        if agent is None:
+            logger.info("Loading agent on first request...")
+            agent = build_agent_singleton()
+    except Exception as e:
+        logger.error(f"Failed to initialize agent: {e}", exc_info=True)
+        return jsonify({'error': 'Service initialization failed'}), 503
     
     data = request.get_json()
     if not data or 'text' not in data:
@@ -112,13 +160,17 @@ def handle_chat():
     user_query = data['text']
     conversation_history = data.get('history', [])
 
-    logger.info(f"Received query: '{user_query}' with {len(conversation_history)} turns in history.")
+    logger.info(f"Received query: '{user_query[:100]}...' with {len(conversation_history)} turns in history.")
 
     try:
-        decision = asyncio.run(agent.handle(
+        # Run the async handler
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        decision = loop.run_until_complete(agent.handle(
             user_query=user_query,
             conversation_history=conversation_history
         ))
+        loop.close()
         
         # Return the full decision object as a dictionary
         return jsonify(asdict(decision))
@@ -127,6 +179,48 @@ def handle_chat():
         logger.error(f"Error handling request: {e}", exc_info=True)
         return jsonify({'error': 'An internal server error occurred.'}), 500
 
+@app.route('/api/clear-cache', methods=['POST'])
+def clear_cache():
+    """Clear the agent's cache (admin endpoint)"""
+    global agent
+    
+    if agent is None:
+        return jsonify({'error': 'Agent not initialized'}), 503
+    
+    try:
+        agent.clear_answer_cache()
+        if hasattr(agent.retriever, 'clear_cache'):
+            agent.retriever.clear_cache()
+        
+        logger.info("Cache cleared successfully")
+        return jsonify({'success': True, 'message': 'Cache cleared'})
+    except Exception as e:
+        logger.error(f"Error clearing cache: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to clear cache'}), 500
+
+# === ERROR HANDLERS ===
+@app.errorhandler(404)
+def not_found(error):
+    """Handle 404 errors"""
+    return jsonify({'error': 'Endpoint not found'}), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    """Handle 500 errors"""
+    logger.error(f"Internal server error: {error}", exc_info=True)
+    return jsonify({'error': 'Internal server error'}), 500
+
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 10000))  # Render uses port 10000 by default
+    # Get port from environment variable (Render sets this)
+    port = int(os.environ.get('PORT', 10000))
+    
+    # Check for required environment variables
+    required_vars = ['PINECONE_API_KEY', 'ANTHROPIC_API_KEY']
+    missing_vars = [var for var in required_vars if not os.environ.get(var)]
+    
+    if missing_vars:
+        logger.warning(f"Missing environment variables: {missing_vars}")
+        logger.warning("The service will fail when trying to process requests")
+    
+    # Run the Flask app
     app.run(host='0.0.0.0', port=port, debug=False)

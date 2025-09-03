@@ -1,4 +1,4 @@
-# prompts.py – helper templates for special routes
+# backend/core_logic/prompts.py
 AE_ROUTE_TEMPLATE = (
     "I cannot provide individualized medical guidance. Because you mentioned a possible adverse event, "
     "the safest next step is to contact your healthcare provider. You can also report side effects to FDA MedWatch "

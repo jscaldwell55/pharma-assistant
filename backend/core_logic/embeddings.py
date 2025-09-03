@@ -1,4 +1,4 @@
-# embeddings.py – Sentence-Transformers wrapper
+# backend/core_logic/embeddings.py
 from typing import List
 from dataclasses import dataclass
 import numpy as np

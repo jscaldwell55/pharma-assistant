@@ -1,4 +1,4 @@
-# context_formatter.py — tight context + fair-balance placement + extractive fallback
+# backend/core_logic/context_formatter.py
 from typing import List, Dict, Any, Optional
 import re
 import os

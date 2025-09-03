@@ -1,4 +1,4 @@
-# conversational_agent.py – retrieve → build context → answer cache → generate → guard → trace
+# backend/core_logic/conversational_agent.py
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 import uuid

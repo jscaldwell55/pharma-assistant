@@ -1,4 +1,4 @@
-# config.py – central settings
+# backend/core_logic/config.py
 from dataclasses import dataclass
 import os
 

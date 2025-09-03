@@ -1,4 +1,4 @@
-# regulatory_defaults.py
+# backend/core_logic/regulatory_defaults.py
 """
 Regulatory defaults (whitelisted, non-product-specific definitions).
 

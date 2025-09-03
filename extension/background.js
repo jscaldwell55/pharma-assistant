@@ -1,4 +1,4 @@
-// extension/background.js Listens for the extension icon click to open the side panel
+// extension/background.js
 chrome.action.onClicked.addListener((tab) => {
   chrome.sidePanel.open({ windowId: tab.windowId });
 });

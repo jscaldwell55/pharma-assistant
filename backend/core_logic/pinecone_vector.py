@@ -1,4 +1,4 @@
-# pinecone_vector.py – minimal vector client with .query(...) for RAG
+# backend/core_logic/pinecone_vector.py
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 import os

@@ -1,4 +1,5 @@
 {
+  "_comment": "extension/manifest.json",
   "manifest_version": 3,
   "name": "Pharma Assistant Benchmark",
   "version": "1.0",

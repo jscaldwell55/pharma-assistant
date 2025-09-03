@@ -1,4 +1,4 @@
-# guard.py – advice/off-label + PHI/AE + crisis + jailbreak + DANGEROUS/CRIMINAL intent (block-first)
+# backend/core_logic/guard.py
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 import re

@@ -1,4 +1,4 @@
-# generate_chunks_from_pdfs.py — minimal PDF → chunks.jsonl exporter
+# backend/core_logic/generate_chunks_from_pdfs.py
 # Usage:
 #   pip install pypdf
 #   python generate_chunks_from_pdfs.py --pdf_dir ./data/pdfs --out ./data/chunks/chunks.jsonl --doc Journavx

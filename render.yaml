@@ -1,22 +1,32 @@
+# render.yaml
 services:
   - type: web
     name: pharma-assistant
-    env: python
-    plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: cd backend/api && python server.py
+    runtime: python
+    buildCommand: "pip install -r requirements.txt && python -m nltk.downloader punkt maxent_ne_chunker words averaged_perceptron_tagger"
+    startCommand: "gunicorn backend.api.server:app --workers=1 --worker-class=gevent --timeout=120 --bind=0.0.0.0:$PORT"
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
       - key: PINECONE_API_KEY
         sync: false
       - key: PINECONE_INDEX
-        sync: false
+        value: "pharma-assistant"
       - key: PINECONE_ENVIRONMENT
-        sync: false
+        value: "us-east-1"
       - key: PINECONE_NAMESPACE
-        sync: false
+        value: ""
       - key: ANTHROPIC_API_KEY
         sync: false
-      - key: FLASK_DEBUG
-        value: "false"
-      - key: PORT
-        value: "10000"
+      - key: ANTHROPIC_MODEL
+        value: "claude-3-7-sonnet-latest"
+      - key: RAG_TOPK
+        value: "60"
+      - key: RAG_FINALK
+        value: "5"
+      - key: GROUNDING_AVG_THRESH
+        value: "0.42"
+      - key: GROUNDING_COVERED_FRAC
+        value: "0.65"
+      - key: FAIR_BALANCE_ENFORCED
+        value: "true"

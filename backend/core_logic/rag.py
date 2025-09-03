@@ -1,4 +1,4 @@
-# rag.py – robust RAG with TTL retrieval cache
+# backend/core_logic/rag.py
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional, Tuple
 import logging

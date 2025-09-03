@@ -1,4 +1,4 @@
-# knowledge_bridge.py - Safe pharmaceutical knowledge augmentation
+# backend/core_logic/knowledge_bridge.py
 """
 Enables LLM to use limited, vetted pharmaceutical knowledge for query understanding
 while maintaining strict safety boundaries.

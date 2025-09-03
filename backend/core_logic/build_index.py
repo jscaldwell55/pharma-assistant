@@ -1,4 +1,4 @@
-# build_index.py — build Pinecone index from JSONL or a folder of JSONLs (auto-creates index)
+# backend/core_logic/build_index.py
 """
 Input JSONL format (one object per line):
 {"id": "doc1-0001", "text": "chunk text here", "meta": {"source": "PI", "section": "Warnings"}}
