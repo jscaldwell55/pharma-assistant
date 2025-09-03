@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(git remote:*)",
+      "Bash(python:*)"
     ],
     "deny": [],
     "ask": []
