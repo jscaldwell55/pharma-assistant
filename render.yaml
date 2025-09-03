@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: pharma-assistant
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: cd backend/api && python server.py
+    envVars:
+      - key: PINECONE_API_KEY
+        sync: false
+      - key: PINECONE_INDEX
+        sync: false
+      - key: PINECONE_ENVIRONMENT
+        sync: false
+      - key: PINECONE_NAMESPACE
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: FLASK_DEBUG
+        value: "false"
+      - key: PORT
+        value: "10000"
