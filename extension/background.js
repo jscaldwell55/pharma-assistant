@@ -3,46 +3,42 @@ chrome.action.onClicked.addListener((tab) => {
   chrome.sidePanel.open({ windowId: tab.windowId });
 });
 
-// The core listener for messages from content scripts
+// The core listener for messages from the extension
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === 'rewriteText' && message.text) {
-    const { text, history } = message;
-
-    console.log("Background script received:", { text, history });
-
-    // Call our local backend API
-    fetch('http://127.0.0.1:5000/api/rewrite', {
+  
+  // --- New Handler for the full chat UI in the side panel ---
+  if (message.type === 'getChatResponse') {
+    const { query, history } = message;
+    fetch('http://127.0.0.1:5000/api/chat', { // Using a new, more descriptive endpoint
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      // Send both the current query and the conversation history
-      body: JSON.stringify({ text: text, history: history }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: query, history: history }),
     })
     .then(response => {
-        if (!response.ok) {
-            // Handle HTTP errors like 500
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         return response.json();
     })
-    .then(data => {
-      // Send the rewritten text back to the content script that requested it
-      sendResponse({ status: 'success', data: data });
+    .then(data => sendResponse({ status: 'success', data: data }))
+    .catch(error => sendResponse({ status: 'error', error: error.message }));
+    
+    return true; // Indicate async response
+  }
 
-      // Also, send the result to the side panel so it can display it
-      chrome.runtime.sendMessage({
-          type: 'displayResult',
-          original: text,
-          rewritten: data.rewritten_text
-      });
+  // --- Kept for the inline "Rewrite" functionality from content.js ---
+  if (message.type === 'rewriteText') {
+    const { text } = message;
+    fetch('http://127.0.0.1:5000/api/chat', { // Can reuse the same endpoint
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: text, history: [] }), // Inline rewrite has no history
     })
-    .catch(error => {
-      console.error('Error calling backend:', error);
-      sendResponse({ status: 'error', error: error.message });
-    });
-
-    // Return true to indicate that we will send a response asynchronously
-    return true;
+    .then(response => {
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return response.json();
+    })
+    .then(data => sendResponse({ status: 'success', data: data }))
+    .catch(error => sendResponse({ status: 'error', error: error.message }));
+    
+    return true; // Indicate async response
   }
 });

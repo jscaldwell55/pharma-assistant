@@ -5,6 +5,7 @@ import logging
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
+from dataclasses import asdict # <-- Add this import to convert the dataclass to a dictionary
 
 # --- CRITICAL: This makes imports from core_logic work ---
 # This adds the parent 'backend' directory to the Python path
@@ -52,10 +53,10 @@ agent = build_agent_singleton()
 # =====================================
 
 # === API ENDPOINT ===
-@app.route('/api/rewrite', methods=['POST'])
-def handle_rewrite():
+@app.route('/api/chat', methods=['POST']) # <-- Renamed endpoint to be more descriptive
+def handle_chat(): # <-- Renamed function to match
     """
-    This is the main API endpoint for the browser extension.
+    This is the main API endpoint for the browser extension's chat UI.
     It expects a JSON payload with 'text' (the user query) 
     and 'history' (the conversation context).
     """
@@ -76,12 +77,14 @@ def handle_rewrite():
             conversation_history=conversation_history
         ))
         
-        # Respond with the generated text in the format the extension expects
-        return jsonify({'rewritten_text': decision.response_text})
+        # --- MODIFIED: Return the full decision object as a dictionary ---
+        # This allows the extension's UI to access safety labels and trace info.
+        return jsonify(asdict(decision))
 
     except Exception as e:
         logger.error(f"Error handling request: {e}", exc_info=True)
         return jsonify({'error': 'An internal server error occurred.'}), 500
 
 if __name__ == '__main__':
+    # Make sure to restart this server after making changes
     app.run(debug=True, port=5000)

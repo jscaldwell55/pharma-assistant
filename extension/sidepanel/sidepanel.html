@@ -1,15 +1,35 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Pharma Assistant</title>
+    <title>Zepbot Assistant</title>
     <link rel="stylesheet" href="sidepanel.css">
 </head>
 <body>
-    <h1>Pharma Assistant</h1>
-    <div id="results-container">
-        <p>Select text on a page and click the rewrite button to see the latest query and response here.</p>
-        <div id="last-query"></div>
+    <div class="header">
+        <h1>Zepbot - 3.5 Sonnet</h1>
+        <div class="controls">
+            <button id="new-conversation-btn" title="Start a new chat session">New Conversation</button>
+            <div class="trace-toggle">
+                <input type="checkbox" id="show-trace-checkbox">
+                <label for="show-trace-checkbox">Show Trace</label>
+            </div>
+        </div>
     </div>
+
+    <div id="chat-container">
+        <!-- Chat messages will be dynamically inserted here -->
+    </div>
+
+    <div id="thinking-indicator" class="hidden">
+        <div class="spinner"></div>
+        <span>Thinking...</span>
+    </div>
+
+    <form id="chat-form">
+        <input type="text" id="chat-input" placeholder="Ask about Zepbound…" autocomplete="off" required>
+        <button type="submit" title="Send message">Send</button>
+    </form>
+
     <script src="sidepanel.js"></script>
 </body>
 </html>
