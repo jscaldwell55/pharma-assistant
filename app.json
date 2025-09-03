@@ -1,0 +1,29 @@
+{
+  "name": "Zepbot Assistant",
+  "description": "A pharmaceutical AI assistant chatbot",
+  "repository": "https://github.com/your-username/pharma-assistant-benchmark",
+  "logo": "https://node-js-sample.herokuapp.com/node.svg",
+  "keywords": ["python", "flask", "ai", "chatbot", "pharmaceutical"],
+  "env": {
+    "PINECONE_API_KEY": {
+      "description": "Your Pinecone API key for vector database access"
+    },
+    "PINECONE_INDEX": {
+      "description": "The name of your Pinecone index"
+    },
+    "PINECONE_ENVIRONMENT": {
+      "description": "Your Pinecone environment (e.g., us-east1-gcp)"
+    },
+    "PINECONE_NAMESPACE": {
+      "description": "Optional Pinecone namespace",
+      "required": false
+    },
+    "ANTHROPIC_API_KEY": {
+      "description": "Your Anthropic API key for Claude access"
+    },
+    "FLASK_DEBUG": {
+      "description": "Set to 'true' for debug mode, 'false' for production",
+      "value": "false"
+    }
+  }
+}

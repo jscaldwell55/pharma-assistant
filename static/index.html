@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zepbot Assistant</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="header">
+        <h1>Zepbot - 3.5 Sonnet</h1>
+        <div class="controls">
+            <button id="new-conversation-btn" title="Start a new chat session">New Conversation</button>
+            <div class="trace-toggle">
+                <input type="checkbox" id="show-trace-checkbox">
+                <label for="show-trace-checkbox">Show Trace</label>
+            </div>
+        </div>
+    </div>
+
+    <div id="chat-container">
+        <!-- Chat messages will be dynamically inserted here -->
+    </div>
+
+    <div id="thinking-indicator" class="hidden">
+        <div class="spinner"></div>
+        <span>Thinking...</span>
+    </div>
+
+    <form id="chat-form">
+        <input type="text" id="chat-input" placeholder="Ask about Zepbound…" autocomplete="off" required>
+        <button type="submit" title="Send message">Send</button>
+    </form>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

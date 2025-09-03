@@ -2,7 +2,7 @@ import os
 import sys
 import asyncio
 import logging
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory, send_file
 from flask_cors import CORS
 from dotenv import load_dotenv
 from dataclasses import asdict # <-- Add this import to convert the dataclass to a dictionary
@@ -52,6 +52,17 @@ def build_agent_singleton():
 agent = build_agent_singleton()
 # =====================================
 
+# === STATIC FILE ROUTES ===
+@app.route('/')
+def serve_index():
+    """Serve the main chat interface"""
+    return send_file('../../static/index.html')
+
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    """Serve static files (CSS, JS, etc.)"""
+    return send_from_directory('../../static', filename)
+
 # === API ENDPOINT ===
 @app.route('/api/chat', methods=['POST']) # <-- Renamed endpoint to be more descriptive
 def handle_chat(): # <-- Renamed function to match
@@ -87,4 +98,5 @@ def handle_chat(): # <-- Renamed function to match
 
 if __name__ == '__main__':
     # Make sure to restart this server after making changes
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=os.environ.get('FLASK_DEBUG', 'False').lower() == 'true')
