@@ -8,13 +8,13 @@ import logging
 import hashlib
 import os
 
-from .guard import Guard
-from .rag import RAGRetriever
-from .context_formatter import build_context, append_fair_balance, extractive_bullets
-from .prompts import AE_ROUTE_TEMPLATE, PHI_SANITIZE_NOTE
+from guard import Guard
+from rag import RAGRetriever
+from context_formatter import build_context, append_fair_balance, extractive_bullets
+from prompts import AE_ROUTE_TEMPLATE, PHI_SANITIZE_NOTE
 
 # Grounding metrics in trace (observability)
-from .grounding import compute_grounding, passes_grounding
+from grounding import compute_grounding, passes_grounding
 
 # For fallback message reuse
 try:

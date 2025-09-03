@@ -56,3 +56,7 @@ USE_NLI_CLASSIFIER: bool = os.getenv("USE_NLI_CLASSIFIER", "0") == "1"
 # If you enable USE_NLI_CLASSIFIER, this must point to a local folder containing the HF model files.
 # Example: "/app/models/roberta-base-mnli"
 NLI_MODEL_PATH: str = os.getenv("NLI_MODEL_PATH", "").strip()
+
+# Chunking parameters
+MAX_CHUNK_TOKENS: int = int(_getenv("MAX_CHUNK_TOKENS", "500"))
+CHUNK_OVERLAP: int = int(_getenv("CHUNK_OVERLAP", "50"))

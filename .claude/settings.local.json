@@ -3,7 +3,9 @@
     "allow": [
       "Bash(rm:*)",
       "Bash(git remote:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(pip uninstall:*)",
+      "Bash(source .env)"
     ],
     "deny": [],
     "ask": []

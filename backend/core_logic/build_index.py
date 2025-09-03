@@ -1,97 +1,389 @@
-# backend/core_logic/build_index.py
+#!/usr/bin/env python3
 """
-Input JSONL format (one object per line):
-{"id": "doc1-0001", "text": "chunk text here", "meta": {"source": "PI", "section": "Warnings"}}
-
-Examples:
-  # Single JSONL
-  PINECONE_API_KEY=... PINECONE_ENVIRONMENT=us-east-1 PINECONE_INDEX=pharma-assistant \
-  python build_index.py --jsonl /path/to/chunks.jsonl --namespace lilly
-
-  # Folder of JSONL files
-  python build_index.py --dir /path/to/jsonls --namespace lilly
+Build Pinecone index from generated chunks.
+This script reads chunks from JSONL and uploads them to Pinecone with embeddings.
 """
-import argparse, os, json, glob, sys
-from typing import Dict, Any, Iterable, List
 
-from embeddings import EmbeddingModel
-from config import settings
+import os
+import sys
+import json
+import time
+from typing import List, Dict, Any
+from pathlib import Path
+import logging
+from dotenv import load_dotenv
 
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Find and load .env file
+script_dir = Path(__file__).parent
+possible_env_paths = [
+    script_dir / '.env',
+    script_dir / '../.env',
+    script_dir / '../../.env',
+    script_dir / '../../backend/.env',
+    Path.cwd() / '.env',
+    Path.cwd() / 'backend/.env',
+]
+
+env_loaded = False
+for env_path in possible_env_paths:
+    if env_path.exists():
+        load_dotenv(env_path)
+        logger.info(f"Loaded environment from: {env_path}")
+        env_loaded = True
+        break
+
+if not env_loaded:
+    logger.warning("No .env file found, using system environment variables only")
+
+# Import dependencies
 try:
     from pinecone import Pinecone, ServerlessSpec
-except Exception as e:
-    print("ERROR: pinecone-client not installed. Run `pip install pinecone-client`.", file=sys.stderr)
-    raise
+except ImportError:
+    logger.error("pinecone-client not installed. Run: pip install pinecone-client")
+    sys.exit(1)
 
-BATCH = 128
+try:
+    from sentence_transformers import SentenceTransformer
+except ImportError:
+    logger.error("sentence-transformers not installed. Run: pip install sentence-transformers")
+    sys.exit(1)
 
-def read_jsonl(path: str) -> Iterable[Dict[str, Any]]:
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            yield json.loads(line)
-
-def iter_records(jsonl: str | None, directory: str | None) -> Iterable[Dict[str, Any]]:
-    if jsonl:
-        yield from read_jsonl(jsonl)
-        return
-    assert directory, "Provide --jsonl or --dir"
-    for file in glob.glob(os.path.join(directory, "*.jsonl")):
-        yield from read_jsonl(file)
-
-def batched(it, size: int):
-    batch: List[Dict[str, Any]] = []
-    for item in it:
-        batch.append(item)
-        if len(batch) >= size:
-            yield batch
-            batch = []
-    if batch:
-        yield batch
-
-def ensure_index(pc: "Pinecone", name: str, dim: int, region: str):
-    existing = [i["name"] for i in pc.list_indexes()]
-    if name in existing:
-        return
-    pc.create_index(
-        name=name,
-        dimension=dim,
-        metric="cosine",
-        spec=ServerlessSpec(cloud="aws", region=region or "us-east-1"),
-    )
+class PineconeIndexBuilder:
+    """Build and manage Pinecone indexes"""
+    
+    def __init__(
+        self,
+        api_key: str = None,
+        index_name: str = "pharma-assistant",
+        environment: str = "us-east-1",
+        embedding_model_name: str = "sentence-transformers/all-mpnet-base-v2"
+    ):
+        self.api_key = api_key or os.getenv("PINECONE_API_KEY")
+        if not self.api_key:
+            raise ValueError(
+                "PINECONE_API_KEY not found. Please either:\n"
+                "1. Set it in your .env file\n"
+                "2. Export it: export PINECONE_API_KEY='your-key'\n"
+                "3. Pass it as --api-key argument"
+            )
+        
+        self.index_name = index_name
+        self.environment = environment
+        self.namespace = os.getenv("PINECONE_NAMESPACE", "")
+        
+        # Initialize Pinecone
+        logger.info(f"Connecting to Pinecone...")
+        self.pc = Pinecone(api_key=self.api_key)
+        
+        # Initialize embedding model
+        logger.info(f"Loading embedding model: {embedding_model_name}")
+        self.embedder = SentenceTransformer(embedding_model_name)
+        self.embedding_dim = self.embedder.get_sentence_embedding_dimension()
+        logger.info(f"Embedding dimension: {self.embedding_dim}")
+    
+    def create_index(self, recreate: bool = False) -> None:
+        """Create Pinecone index if it doesn't exist"""
+        try:
+            existing_indexes = [index.name for index in self.pc.list_indexes()]
+        except Exception as e:
+            logger.error(f"Failed to list indexes. Check your API key and network connection: {e}")
+            raise
+        
+        if self.index_name in existing_indexes:
+            if recreate:
+                logger.warning(f"Deleting existing index: {self.index_name}")
+                self.pc.delete_index(self.index_name)
+                time.sleep(5)  # Wait for deletion
+            else:
+                logger.info(f"Index {self.index_name} already exists, using it")
+                self.index = self.pc.Index(self.index_name)
+                return
+        
+        logger.info(f"Creating new index: {self.index_name}")
+        try:
+            self.pc.create_index(
+                name=self.index_name,
+                dimension=self.embedding_dim,
+                metric="cosine",
+                spec=ServerlessSpec(
+                    cloud="aws",
+                    region=self.environment
+                )
+            )
+        except Exception as e:
+            logger.error(f"Failed to create index: {e}")
+            raise
+        
+        # Wait for index to be ready
+        logger.info("Waiting for index to be ready...")
+        time.sleep(10)
+        
+        self.index = self.pc.Index(self.index_name)
+        logger.info(f"Index {self.index_name} created successfully")
+    
+    def load_chunks(self, chunks_file: str) -> List[Dict[str, Any]]:
+        """Load chunks from JSONL file"""
+        chunks = []
+        chunks_path = Path(chunks_file)
+        
+        if not chunks_path.exists():
+            raise FileNotFoundError(f"Chunks file not found: {chunks_file}")
+        
+        with open(chunks_path, 'r', encoding='utf-8') as f:
+            for line_num, line in enumerate(f, 1):
+                try:
+                    chunk = json.loads(line)
+                    # Ensure required fields
+                    if 'id' not in chunk or 'text' not in chunk:
+                        logger.warning(f"Line {line_num}: Missing 'id' or 'text' field, skipping")
+                        continue
+                    chunks.append(chunk)
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Line {line_num}: Invalid JSON, skipping: {e}")
+        
+        logger.info(f"Loaded {len(chunks)} valid chunks from {chunks_file}")
+        return chunks
+    
+    def prepare_vectors(self, chunks: List[Dict[str, Any]], batch_size: int = 32) -> List[Dict[str, Any]]:
+        """Prepare vectors for Pinecone upload"""
+        vectors = []
+        total_batches = (len(chunks) + batch_size - 1) // batch_size
+        
+        for i in range(0, len(chunks), batch_size):
+            batch = chunks[i:i + batch_size]
+            texts = [chunk["text"] for chunk in batch]
+            
+            # Generate embeddings
+            batch_num = i // batch_size + 1
+            logger.info(f"Encoding batch {batch_num}/{total_batches} ({len(texts)} texts)")
+            embeddings = self.embedder.encode(
+                texts, 
+                normalize_embeddings=True, 
+                show_progress_bar=False,
+                convert_to_numpy=True
+            )
+            
+            # Create vector records
+            for chunk, embedding in zip(batch, embeddings):
+                metadata = chunk.get("metadata", chunk.get("meta", {}))
+                
+                # Ensure text is in metadata for retrieval
+                if "text" not in metadata:
+                    metadata["text"] = chunk["text"][:1000]  # Truncate for metadata limit
+                if "chunk" not in metadata:
+                    metadata["chunk"] = chunk["text"]  # Full text in separate field
+                
+                vector = {
+                    "id": chunk["id"],
+                    "values": embedding.tolist(),
+                    "metadata": metadata
+                }
+                vectors.append(vector)
+        
+        logger.info(f"Prepared {len(vectors)} vectors")
+        return vectors
+    
+    def upload_vectors(self, vectors: List[Dict[str, Any]], batch_size: int = 100) -> None:
+        """Upload vectors to Pinecone"""
+        total_vectors = len(vectors)
+        total_batches = (total_vectors + batch_size - 1) // batch_size
+        
+        for i in range(0, total_vectors, batch_size):
+            batch = vectors[i:i + batch_size]
+            batch_num = i // batch_size + 1
+            
+            logger.info(f"Uploading batch {batch_num}/{total_batches} ({len(batch)} vectors)")
+            
+            try:
+                if self.namespace:
+                    self.index.upsert(vectors=batch, namespace=self.namespace)
+                else:
+                    self.index.upsert(vectors=batch)
+            except Exception as e:
+                logger.error(f"Failed to upload batch {batch_num}: {e}")
+                raise
+            
+            # Small delay to avoid rate limiting
+            time.sleep(0.1)
+        
+        logger.info(f"✅ Successfully uploaded {total_vectors} vectors to Pinecone")
+    
+    def verify_index(self) -> Dict[str, Any]:
+        """Verify index statistics"""
+        try:
+            stats = self.index.describe_index_stats()
+            logger.info(f"Index statistics: {stats}")
+            return stats
+        except Exception as e:
+            logger.error(f"Failed to get index stats: {e}")
+            return {}
+    
+    def test_query(self, query_text: str = "What are the side effects?", top_k: int = 3) -> None:
+        """Test the index with a sample query"""
+        logger.info(f"Testing query: '{query_text}'")
+        
+        # Encode query
+        query_vector = self.embedder.encode(query_text, normalize_embeddings=True).tolist()
+        
+        # Query index
+        try:
+            if self.namespace:
+                results = self.index.query(
+                    vector=query_vector,
+                    top_k=top_k,
+                    include_metadata=True,
+                    namespace=self.namespace
+                )
+            else:
+                results = self.index.query(
+                    vector=query_vector,
+                    top_k=top_k,
+                    include_metadata=True
+                )
+            
+            # Display results
+            logger.info(f"Found {len(results.matches)} matches:")
+            for i, match in enumerate(results.matches, 1):
+                logger.info(f"  {i}. Score: {match.score:.3f}")
+                text_preview = match.metadata.get("text", "")[:100]
+                logger.info(f"     Text: {text_preview}...")
+        except Exception as e:
+            logger.error(f"Query failed: {e}")
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--jsonl", help="Path to JSONL")
-    ap.add_argument("--dir", help="Folder with JSONL files")
-    ap.add_argument("--namespace", default=None, help="Pinecone namespace (optional)")
-    args = ap.parse_args()
-
-    # Init embedder to determine dimension
-    embedder = EmbeddingModel()
-    dim = int(embedder.encode_one("ping").shape[-1])
-
-    # Init Pinecone and ensure index exists
-    api_key = os.getenv("PINECONE_API_KEY", settings.pinecone.API_KEY)
-    region = os.getenv("PINECONE_ENVIRONMENT", settings.pinecone.ENVIRONMENT)
-    index_name = os.getenv("PINECONE_INDEX", settings.pinecone.INDEX)
-
-    pc = Pinecone(api_key=api_key)
-    ensure_index(pc, index_name, dim, region)
-    index = pc.Index(index_name)
-
-    # Upsert vectors
-    for batch in batched(iter_records(args.jsonl, args.dir), BATCH):
-        ids = [rec["id"] for rec in batch]
-        texts = [rec["text"] for rec in batch]
-        metas = [rec.get("meta", {}) | {"text": rec["text"]} for rec in batch]
-        vecs = embedder.encode(texts).tolist()
-        to_upsert = list(zip(ids, vecs, metas))
-        index.upsert(vectors=to_upsert, namespace=args.namespace)
-
-    print(f"Done. Upserted into index '{index_name}' (namespace={args.namespace!r}).")
+    """Main entry point"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(
+        description="Build Pinecone index from chunks",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Build from chunks file (most common)
+  python build_index.py --chunks data/chunks.jsonl
+  
+  # Recreate index from scratch
+  python build_index.py --chunks data/chunks.jsonl --recreate
+  
+  # Test with a custom query
+  python build_index.py --chunks data/chunks.jsonl --test-query "What is the dosage?"
+  
+  # Use specific API key
+  python build_index.py --chunks data/chunks.jsonl --api-key your-key-here
+        """
+    )
+    
+    parser.add_argument(
+        "--chunks", "--jsonl",
+        default="data/chunks.jsonl",
+        help="Path to chunks JSONL file (default: data/chunks.jsonl)"
+    )
+    parser.add_argument(
+        "--index-name",
+        default=os.getenv("PINECONE_INDEX", "pharma-assistant"),
+        help="Pinecone index name"
+    )
+    parser.add_argument(
+        "--api-key",
+        default=None,
+        help="Pinecone API key (or set PINECONE_API_KEY env var)"
+    )
+    parser.add_argument(
+        "--recreate",
+        action="store_true",
+        help="Delete and recreate index if it exists"
+    )
+    parser.add_argument(
+        "--test-query",
+        help="Test query to run after indexing"
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=100,
+        help="Batch size for uploading (default: 100)"
+    )
+    parser.add_argument(
+        "--embedding-model",
+        default="sentence-transformers/all-mpnet-base-v2",
+        help="Embedding model to use"
+    )
+    parser.add_argument(
+        "--namespace",
+        default=os.getenv("PINECONE_NAMESPACE", ""),
+        help="Namespace for vectors (optional)"
+    )
+    
+    args = parser.parse_args()
+    
+    # Check if chunks file exists
+    chunks_path = Path(args.chunks)
+    if not chunks_path.is_absolute():
+        # Try relative to script location
+        chunks_path = Path(__file__).parent / args.chunks
+    
+    if not chunks_path.exists():
+        logger.error(f"Chunks file not found: {chunks_path}")
+        logger.info("Please run generate_chunks_from_pdfs.py first to create chunks")
+        logger.info("Example: python generate_chunks_from_pdfs.py")
+        sys.exit(1)
+    
+    try:
+        # Initialize builder
+        builder = PineconeIndexBuilder(
+            api_key=args.api_key,
+            index_name=args.index_name,
+            embedding_model_name=args.embedding_model
+        )
+        
+        # Set namespace if provided
+        if args.namespace:
+            builder.namespace = args.namespace
+            logger.info(f"Using namespace: {args.namespace}")
+        
+        # Create/connect to index
+        builder.create_index(recreate=args.recreate)
+        
+        # Load chunks
+        chunks = builder.load_chunks(str(chunks_path))
+        
+        if not chunks:
+            logger.warning("No chunks to upload")
+            return
+        
+        # Prepare vectors
+        logger.info("Preparing vectors...")
+        vectors = builder.prepare_vectors(chunks, batch_size=32)
+        
+        # Upload to Pinecone
+        logger.info("Uploading to Pinecone...")
+        builder.upload_vectors(vectors, batch_size=args.batch_size)
+        
+        # Verify
+        stats = builder.verify_index()
+        
+        # Test query
+        if args.test_query:
+            builder.test_query(args.test_query)
+        else:
+            # Default test
+            builder.test_query("What is the recommended dosage?")
+        
+        logger.info("=" * 60)
+        logger.info("✅ Index building complete!")
+        logger.info(f"Index: {args.index_name}")
+        if builder.namespace:
+            logger.info(f"Namespace: {builder.namespace}")
+        logger.info(f"Vectors: {len(vectors)}")
+        logger.info("Your index is ready to use!")
+        
+    except Exception as e:
+        logger.error(f"Error building index: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
