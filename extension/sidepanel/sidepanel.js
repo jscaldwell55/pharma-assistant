@@ -1,4 +1,4 @@
-// --- DOM Elements ---
+// --- extension/sidepanel/sidepanel.js DOM Elements ---
 const chatContainer = document.getElementById('chat-container');
 const chatForm = document.getElementById('chat-form');
 const chatInput = document.getElementById('chat-input');

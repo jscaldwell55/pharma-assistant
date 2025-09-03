@@ -1,3 +1,4 @@
+// extension/content.js
 let rewriteButton = null;
 let currentSelection = null;
 // No chatHistory here; it's managed by the side panel. This script is for stateless inline actions.
