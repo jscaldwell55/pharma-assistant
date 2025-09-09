@@ -2,7 +2,7 @@
 from typing import List
 from dataclasses import dataclass
 import numpy as np
-from config import settings
+from .config import settings
 
 try:
     from sentence_transformers import SentenceTransformer

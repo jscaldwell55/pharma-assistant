@@ -6,7 +6,7 @@ import re
 import logging
 import tiktoken
 
-from config import MAX_CHUNK_TOKENS, CHUNK_OVERLAP
+from .config import MAX_CHUNK_TOKENS, CHUNK_OVERLAP
 
 logger = logging.getLogger(__name__)
 

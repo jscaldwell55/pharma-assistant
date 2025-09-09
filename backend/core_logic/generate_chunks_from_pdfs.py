@@ -13,7 +13,7 @@ from pathlib import Path
 import logging
 
 # Import your chunking logic
-from semantic_chunker import SemanticChunker
+from .semantic_chunker import SemanticChunker
 
 # PDF processing
 try:

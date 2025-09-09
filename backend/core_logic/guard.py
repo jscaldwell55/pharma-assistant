@@ -6,8 +6,8 @@ import logging
 import os
 from collections import OrderedDict
 
-from config import settings
-from grounding import compute_grounding, passes_grounding  # grounding gate
+from .config import settings
+from .grounding import compute_grounding, passes_grounding  # grounding gate
 
 logger = logging.getLogger("guard")
 

@@ -2,7 +2,7 @@
 import os, json, logging
 from typing import Dict, Any
 from dataclasses import dataclass
-from config import settings
+from .config import settings
 
 logger = logging.getLogger("trace")
 
