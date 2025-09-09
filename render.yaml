@@ -4,7 +4,7 @@ services:
     name: pharma-assistant
     runtime: python
     buildCommand: "pip install -r requirements.txt && python -m nltk.downloader punkt maxent_ne_chunker words averaged_perceptron_tagger"
-    startCommand: "gunicorn backend.api.server:app --workers=1 --worker-class=gevent --timeout=120 --bind=0.0.0.0:$PORT"
+    # Remove startCommand to use Procfile instead
     envVars:
       - key: PYTHON_VERSION
         value: "3.11"

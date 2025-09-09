@@ -1,3 +1,4 @@
+# README
 # Pharma Assistant — System Overview & Safety Design
 
 A safety-first pharmaceutical information assistant that answers only from approved, uploaded documents (labeling, PI, patient leaflets). The system emphasizes traceability, guardrails, fair-balance, and grounding, approximating the orchestration patterns used in enterprise GenAI stacks.
@@ -397,3 +398,71 @@ ANTHROPIC_MODEL=claude-3-7-sonnet-20250109                  # Claude model versi
 - **Strict grounding**: Conservative thresholds may increase refusal rate for edge cases
 - **Manual knowledge curation**: Knowledge Bridge mappings require ongoing maintenance
 - **Client-side state**: Conversation persistence depends on browser extension implementation
+
+## Complete Project Structure
+
+```
+pharma-assistant-benchmark/
+├── README.md                          # Main project documentation
+├── requirements.txt                   # Python dependencies
+├── runtime.txt                        # Python version specification
+├── Procfile                          # Deployment configuration
+├── render.yaml                       # Render.com deployment config
+├── .python-version                   # Python version for pyenv
+├── .gitignore                        # Git ignore patterns
+│
+├── backend/                          # Core backend services
+│   ├── __init__.py                   # Package initialization
+│   ├── .env                          # Environment variables (local)
+│   │
+│   ├── api/                          # Flask API layer
+│   │   ├── __init__.py               
+│   │   └── server.py                 # Main Flask application with endpoints
+│   │
+│   ├── core_logic/                   # Core pharmaceutical AI logic
+│   │   ├── README.md                 # Detailed system documentation (this file)
+│   │   ├── __init__.py               
+│   │   ├── conversational_agent.py   # Main conversation orchestrator
+│   │   ├── llm_client.py             # Claude API integration
+│   │   ├── rag.py                    # RAG retrieval pipeline
+│   │   ├── knowledge_bridge.py       # Query expansion and synonyms
+│   │   ├── guard.py                  # Safety and filtering system
+│   │   ├── grounding.py              # Response grounding validation
+│   │   ├── fair_balance.py           # Risk-benefit coupling
+│   │   ├── trace_export.py           # Structured logging and traces
+│   │   ├── utils.py                  # Utility functions
+│   │   ├── config.py                 # Configuration management
+│   │   ├── models.py                 # Data models and schemas
+│   │   └── backend/                  # Additional backend utilities
+│   │       └── [various support files]
+│   │
+│   └── data/                         # Backend data storage
+│       └── chunks/                   # Processed document chunks
+│           └── [chunk files]
+│
+├── data/                             # Source documents and processing
+│   ├── Zepbound.pdf                  # Example pharmaceutical document
+│   └── chunks/                       # Document processing output
+│       └── [processed chunks]
+│
+├── extension/                        # Browser extension for web integration
+│   ├── manifest.json                 # Extension configuration
+│   ├── background.js                 # Background service worker
+│   ├── content.js                    # Content script for web pages
+│   ├── icons/                        # Extension icons
+│   │   ├── icon16.png
+│   │   ├── icon48.png
+│   │   └── icon128.png
+│   └── sidepanel/                    # Extension UI components
+│       ├── sidepanel.html            # Main UI layout
+│       ├── sidepanel.js              # UI interaction logic
+│       └── sidepanel.css             # Styling
+│
+├── static/                           # Web application assets (optional)
+│   ├── index.html                    # Static web interface
+│   ├── script.js                     # Frontend JavaScript
+│   └── style.css                     # Frontend styling
+│
+└── .claude/                          # Claude Code configuration
+    └── [configuration files]
+```

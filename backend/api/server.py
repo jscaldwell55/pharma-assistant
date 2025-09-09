@@ -1,3 +1,4 @@
+# backend/api/server.py
 import os
 import sys
 import asyncio
@@ -25,7 +26,14 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("api_server")
 
 app = Flask(__name__, static_folder='../../static')
-CORS(app) # Allows cross-origin requests
+
+# Configure CORS with specific origins
+CORS(app, origins=[
+    "chrome-extension://*",  # For browser extension
+    "https://pharma-assistant-api.onrender.com",  # Your specific Render domain
+    "http://localhost:*",  # For local development
+    "http://127.0.0.1:*",  # For local development
+])
 
 # Global agent variable
 agent = None

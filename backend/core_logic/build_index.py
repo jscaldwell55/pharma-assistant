@@ -1,3 +1,4 @@
+# backend/core_logic/build_index.py
 #!/usr/bin/env python3
 """
 Build Pinecone index from generated chunks.

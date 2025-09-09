@@ -1,3 +1,4 @@
+# backend/core_logic/generate_chunks_from_pdfs.py
 #!/usr/bin/env python3
 """
 Generate chunks from PDF documents for Pinecone indexing.

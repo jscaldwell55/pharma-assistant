@@ -30,7 +30,6 @@ redis==5.0.4
 pydantic==2.7.4
 
 # ASGI / prod server
-uvicorn[standard]==0.30.6     # provides uvloop, httptools
 gunicorn==21.2.0
 gevent==23.9.1                # only if you run -k gevent
 
