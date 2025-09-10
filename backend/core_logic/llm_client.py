@@ -27,13 +27,12 @@ NO_CONTEXT_FALLBACK_MESSAGE = os.getenv(
 
 # Try to import project-level constants if they exist; env overrides still apply
 try:
-    from .config import (  # type: ignore
-        ANTHROPIC_API_KEY as CFG_API_KEY,
-        CLAUDE_MODEL as CFG_MODEL,
-        MAX_TOKENS as CFG_MAX_TOKENS,
-        TEMPERATURE as CFG_TEMPERATURE,
-        NO_CONTEXT_FALLBACK_MESSAGE as CFG_FALLBACK,
-    )
+    from .config import settings
+    CFG_API_KEY = settings.llm.ANTHROPIC_API_KEY
+    CFG_MODEL = settings.llm.CLAUDE_MODEL
+    CFG_MAX_TOKENS = settings.llm.MAX_TOKENS
+    CFG_TEMPERATURE = settings.llm.TEMPERATURE
+    CFG_FALLBACK = settings.llm.NO_CONTEXT_FALLBACK_MESSAGE
     if CFG_API_KEY and not ANTHROPIC_API_KEY:
         ANTHROPIC_API_KEY = CFG_API_KEY
     if CFG_MODEL:
