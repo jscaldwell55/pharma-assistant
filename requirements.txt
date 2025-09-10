@@ -2,6 +2,7 @@
 flask==3.0.0
 flask-cors==4.0.0
 python-dotenv==1.0.0
+google-auth
 
 # RAG / ML stack
 sentence-transformers==2.2.2
@@ -35,3 +36,4 @@ gevent==23.9.1                # only if you run -k gevent
 
 # HTTP client (if you need it explicitly)
 aiohttp==3.9.5
+PyMuPDF==1.23.26
