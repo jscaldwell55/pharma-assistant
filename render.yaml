@@ -4,7 +4,6 @@ services:
     name: pharma-assistant
     runtime: python
     buildCommand: "pip install -r requirements.txt && python -m nltk.downloader punkt maxent_ne_chunker words averaged_perceptron_tagger"
-    # Remove startCommand to use Procfile instead
     envVars:
       - key: PYTHON_VERSION
         value: "3.11"
