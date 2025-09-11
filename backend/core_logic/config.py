@@ -8,9 +8,9 @@ def _getenv(name: str, default: str) -> str:
 @dataclass(frozen=True)
 class Models:
     # Larger embedding model (768d) for stronger retrieval
-    EMBEDDING_MODEL: str = _getenv("EMBEDDING_MODEL", "sentence-transformers/all-mpnet-base-v2")
+    EMBEDDING_MODEL: str = _getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
     # Cross-encoder reranker
-    RERANKER_MODEL: str = _getenv("RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")
+    RERANKER_MODEL: str = _getenv("RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L-2-v2")
     # Zero-shot classifier for guard
     CLASSIFIER_MODEL: str = _getenv("CLASSIFIER_MODEL", "roberta-base-mnli")
 
