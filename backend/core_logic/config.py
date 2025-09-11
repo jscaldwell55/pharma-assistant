@@ -7,11 +7,11 @@ def _getenv(name: str, default: str) -> str:
 
 @dataclass(frozen=True)
 class Models:
-    # Larger embedding model (768d) for stronger retrieval
-    EMBEDDING_MODEL: str = _getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
-    # Cross-encoder reranker
-    RERANKER_MODEL: str = _getenv("RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L-2-v2")
-    # Zero-shot classifier for guard
+    # Larger embedding model (768d) for stronger retrieval - works great with 2GB RAM
+    EMBEDDING_MODEL: str = _getenv("EMBEDDING_MODEL", "sentence-transformers/all-mpnet-base-v2")
+    # Cross-encoder reranker for better result ranking
+    RERANKER_MODEL: str = _getenv("RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")
+    # Zero-shot classifier for guard (keep disabled to save memory)
     CLASSIFIER_MODEL: str = _getenv("CLASSIFIER_MODEL", "roberta-base-mnli")
 
 @dataclass(frozen=True)
@@ -77,6 +77,7 @@ CHUNK_OVERLAP = settings.chunking.CHUNK_OVERLAP
 
 # If True, guard will try to load a LOCAL MNLI model from NLI_MODEL_PATH.
 # If False, it will skip MNLI entirely and use the embedding classifier (quietly).
+# Keep this disabled (False) to save memory even with 2GB
 USE_NLI_CLASSIFIER: bool = os.getenv("USE_NLI_CLASSIFIER", "0") == "1"
 
 # If you enable USE_NLI_CLASSIFIER, this must point to a local folder containing the HF model files.
