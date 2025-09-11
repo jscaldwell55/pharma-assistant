@@ -6,21 +6,20 @@ import logging
 
 logger = logging.getLogger("vector")
 
-# Pinecone SDK (new package name is "pinecone")
+# Pinecone SDK
 try:
     from pinecone import Pinecone
 except Exception as e:
     Pinecone = None
     _PC_IMPORT_ERR = e
 
-# Local embedding (match your retrieval model)
+# Load sentence transformers normally
 try:
     from sentence_transformers import SentenceTransformer
 except Exception:
     SentenceTransformer = None
 
 DEFAULT_EMBED_MODEL = os.getenv("EMBED_MODEL", "sentence-transformers/all-mpnet-base-v2")
-
 
 @dataclass
 class PineconeVectorClient:
@@ -53,12 +52,12 @@ class PineconeVectorClient:
         # Assume index exists (create via build_index.py). This is fastest in hot path.
         self._index = self._pc.Index(self.index_name)
 
+        # With 2GB RAM, load embedder immediately
         if SentenceTransformer is None:
             raise RuntimeError("sentence-transformers not installed for embedding model.")
         self._embedder = SentenceTransformer(self.embed_model_name)
         logger.info("Loaded embedder: %s", self.embed_model_name)
 
-    # --- public API used by RAG ---
     def query(self, text: str, top_k: int = 10, namespace: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Run a vector similarity search and return a list of:
@@ -76,10 +75,9 @@ class PineconeVectorClient:
             namespace=ns or "",
         )
 
-        matches = getattr(res, "matches", None) or res.get("matches", [])  # support dict/obj styles
+        matches = getattr(res, "matches", None) or res.get("matches", [])
         out: List[Dict[str, Any]] = []
         for m in matches or []:
-            # Pinecone returns attributes either via dot or dict access depending on client version
             _id = getattr(m, "id", None) or m.get("id")
             _score = float(getattr(m, "score", 0.0) or m.get("score", 0.0) or 0.0)
             _meta = getattr(m, "metadata", None) or m.get("metadata") or {}
