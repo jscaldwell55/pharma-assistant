@@ -18,7 +18,8 @@ pypdf==4.2.0                 # PDF ingestion
 pinecone-client==3.0.0
 
 # LLM client
-anthropic==0.29.0
+anthropic==0.34.2
+httpx==0.27.0
 
 # Text processing / splitters
 nltk==3.8.1
