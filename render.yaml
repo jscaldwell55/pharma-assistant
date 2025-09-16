@@ -1,31 +1,60 @@
-# render.yaml
 services:
   - type: web
     name: pharma-assistant
     runtime: python
     buildCommand: "pip install -r requirements.txt && python -m nltk.downloader punkt maxent_ne_chunker words averaged_perceptron_tagger"
+    startCommand: "gunicorn -c gunicorn_config.py backend.api.server:app"
     envVars:
       - key: PYTHON_VERSION
         value: "3.11"
+      # API Keys (set in Render dashboard as secrets)
       - key: PINECONE_API_KEY
         sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Pinecone Configuration
       - key: PINECONE_INDEX
         value: "pharma-assistant"
       - key: PINECONE_ENVIRONMENT
         value: "us-east-1"
       - key: PINECONE_NAMESPACE
         value: ""
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: ANTHROPIC_MODEL
-        value: "claude-3-7-sonnet-latest"
+      # Memory Optimizations
+      - key: SKIP_RERANKER
+        value: "true"
+      - key: EMBEDDING_MODEL
+        value: "sentence-transformers/all-MiniLM-L6-v2"
+      - key: GROUNDING_EMBED_MODEL
+        value: "sentence-transformers/all-MiniLM-L6-v2"
+      - key: USE_NLI_CLASSIFIER
+        value: "0"
+      # RAG Configuration
       - key: RAG_TOPK
         value: "25"
       - key: RAG_FINALK
         value: "5"
+      - key: RAG_W_RERANK
+        value: "0.0"
+      - key: RAG_W_LEX
+        value: "0.50"
+      - key: RAG_W_VEC
+        value: "0.50"
+      - key: RAG_CACHE_MAX
+        value: "128"
+      - key: ANS_CACHE_MAX
+        value: "128"
+      # Grounding Configuration
       - key: GROUNDING_AVG_THRESH
         value: "0.42"
       - key: GROUNDING_COVERED_FRAC
         value: "0.65"
+      # Safety Configuration
       - key: FAIR_BALANCE_ENFORCED
         value: "true"
+      - key: ADVICE_THRESHOLD
+        value: "0.55"
+      - key: OFF_LABEL_THRESHOLD
+        value: "0.55"
+      # Claude Configuration
+      - key: ANTHROPIC_MODEL
+        value: "claude-3-7-sonnet-latest"
