@@ -16,7 +16,7 @@ class Models:
 
 @dataclass(frozen=True)
 class Retrieval:
-    CANDIDATES: int = int(_getenv("RETRIEVAL_CANDIDATES", "20"))
+    CANDIDATES: int = int(_getenv("RETRIEVAL_CANDIDATES", "15"))
     TOP_K_FINAL: int = int(_getenv("RETRIEVAL_TOP_K_FINAL", "5"))
     MIN_SCORE: float = float(_getenv("RETRIEVAL_MIN_SCORE", "0.0"))
 
