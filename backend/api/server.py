@@ -118,14 +118,17 @@ def build_agent_singleton():
         # Don't raise - allow server to start even if initialization fails
         return None
 
-# Initialize on first request instead of at startup
-# This gives more time for model preloading
-@app.before_first_request
-def initialize_agent():
-    """Initialize agent on first request"""
-    global agent
-    if agent is None:
-        agent = build_agent_singleton()
+# Initialize agent after app creation
+# Using a flag to ensure it only happens once
+_agent_initialized = False
+
+def ensure_agent_initialized():
+    """Ensure agent is initialized (called on first request)"""
+    global agent, _agent_initialized
+    if not _agent_initialized:
+        if agent is None:
+            agent = build_agent_singleton()
+        _agent_initialized = True
 
 # === HEALTH CHECK (doesn't require agent) ===
 @app.route('/api/health', methods=['GET'])
@@ -168,9 +171,8 @@ def handle_rewrite():
     """Original endpoint for browser extension compatibility"""
     global agent
     
-    # Initialize agent if needed
-    if agent is None:
-        agent = build_agent_singleton()
+    # Ensure agent is initialized
+    ensure_agent_initialized()
         
     if agent is None:
         return jsonify({'error': 'Service is initializing, please try again in a moment'}), 503
@@ -218,9 +220,8 @@ def handle_chat():
     """Enhanced endpoint for web UI"""
     global agent
     
-    # Initialize agent if needed
-    if agent is None:
-        agent = build_agent_singleton()
+    # Ensure agent is initialized
+    ensure_agent_initialized()
         
     if agent is None:
         return jsonify({'error': 'Service is initializing, please try again in a moment'}), 503
