@@ -20,7 +20,7 @@ services:
       - key: ANTHROPIC_MODEL
         value: "claude-3-7-sonnet-latest"
       - key: RAG_TOPK
-        value: "60"
+        value: "25"
       - key: RAG_FINALK
         value: "5"
       - key: GROUNDING_AVG_THRESH
