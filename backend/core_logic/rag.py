@@ -9,11 +9,18 @@ import time
 
 logger = logging.getLogger("rag")
 
-# Optional reranker
-try:
-    from sentence_transformers import CrossEncoder
-except Exception:
+# Optional reranker - check if it should be skipped
+SKIP_RERANKER = os.getenv("SKIP_RERANKER", "false").lower() == "true"
+
+if not SKIP_RERANKER:
+    try:
+        from sentence_transformers import CrossEncoder
+    except Exception:
+        CrossEncoder = None
+        logger.warning("CrossEncoder not available, will skip reranking")
+else:
     CrossEncoder = None
+    logger.info("Reranker disabled by SKIP_RERANKER environment variable")
 
 # Lexical scoring
 try:
@@ -23,7 +30,6 @@ except Exception:
     TfidfVectorizer = None
     np = None
 
-
 def _minmax(xs: List[float]) -> List[float]:
     if not xs:
         return []
@@ -32,10 +38,8 @@ def _minmax(xs: List[float]) -> List[float]:
         return [0.0 for _ in xs]
     return [(x - lo) / (hi - lo) for x in xs]
 
-
 def _norm_q(s: str) -> str:
     return re.sub(r"\s+", " ", (s or "").strip().lower())
-
 
 class _TTLCache:
     def __init__(self, maxsize: int = 256, ttl_sec: int = 1800):
@@ -63,37 +67,43 @@ class _TTLCache:
     def clear(self):
         self._d.clear()
 
-
 @dataclass
 class RAGRetriever:
     vector_client: Any
-    # Recall & cut
-    top_k: int = int(os.getenv("RAG_TOPK", "60"))
+    # Reduce candidates for memory efficiency
+    top_k: int = int(os.getenv("RAG_TOPK", "25"))  # Reduced from 60
     final_k: int = int(os.getenv("RAG_FINALK", "5"))
     namespace: Optional[str] = os.getenv("PINECONE_NAMESPACE") or None
 
-    # Models / weights
+    # Models / weights - adjust when reranker is disabled
     reranker_name: str = os.getenv("RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")
-    W_RERANK: float = float(os.getenv("RAG_W_RERANK", "0.60"))
-    W_LEX: float = float(os.getenv("RAG_W_LEX", "0.25"))
-    W_VEC: float = float(os.getenv("RAG_W_VEC", "0.15"))
+    W_RERANK: float = float(os.getenv("RAG_W_RERANK", "0.0" if SKIP_RERANKER else "0.60"))
+    W_LEX: float = float(os.getenv("RAG_W_LEX", "0.50" if SKIP_RERANKER else "0.25"))
+    W_VEC: float = float(os.getenv("RAG_W_VEC", "0.50" if SKIP_RERANKER else "0.15"))
 
     # Term-rescue settings
     RESCUE_MIN_HITS: int = int(os.getenv("RAG_RESCUE_MIN_HITS", "2"))
 
     # Cache settings
     ENABLE_CACHE: bool = bool(int(os.getenv("RAG_CACHE", "1")))
-    CACHE_MAX: int = int(os.getenv("RAG_CACHE_MAX", "256"))
+    CACHE_MAX: int = int(os.getenv("RAG_CACHE_MAX", "128"))  # Reduced cache size
     CACHE_TTL: int = int(os.getenv("RAG_CACHE_TTL", "1800"))
 
     def __post_init__(self):
         self._ce = None
-        if CrossEncoder is not None:
+        if CrossEncoder is not None and not SKIP_RERANKER:
             try:
                 self._ce = CrossEncoder(self.reranker_name)
                 logger.info("Loaded reranker: %s", self.reranker_name)
             except Exception as e:
                 logger.warning("Reranker unavailable (%s) – vector+lexical only.", str(e))
+                # Adjust weights when reranker fails
+                self.W_RERANK = 0.0
+                self.W_LEX = 0.50
+                self.W_VEC = 0.50
+        else:
+            logger.info("Reranker disabled - using vector+lexical scoring only")
+            
         self._cache = _TTLCache(self.CACHE_MAX, self.CACHE_TTL)
         self._last_cache_hit: bool = False
 
@@ -155,7 +165,8 @@ class RAGRetriever:
             variants.append(" ".join(base_terms + ["drug interactions", "contraindications"]))
         variants.insert(0, q.strip())
         key_terms = sorted(set(base_terms))
-        return variants, key_terms
+        # Limit variants to reduce memory usage
+        return variants[:3], key_terms  # Reduced from unlimited
 
     def _dedup(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         seen = set()
@@ -192,10 +203,18 @@ class RAGRetriever:
         if TfidfVectorizer is None or np is None or not cands:
             return [0.0] * len(cands)
         texts = [query] + [c.get("text", "") or "" for c in cands]
-        vec = TfidfVectorizer(ngram_range=(1, 2), max_features=20000, stop_words="english", norm="l2")
+        
+        # Use simpler TF-IDF configuration to save memory
+        vec = TfidfVectorizer(
+            ngram_range=(1, 1),  # Reduced from (1,2) to save memory
+            max_features=5000,   # Reduced from 20000
+            stop_words="english",
+            norm="l2"
+        )
         try:
             X = vec.fit_transform(texts)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"TF-IDF failed: {e}, returning zeros")
             return [0.0] * len(cands)
         qv = X[0]
         D = X[1:]
@@ -206,12 +225,22 @@ class RAGRetriever:
     def _rerank(self, query: str, cands: List[Dict[str, Any]]) -> List[float]:
         if self._ce is None or not cands:
             return [0.0] * len(cands)
-        pairs = [(query, r.get("text", "") or "") for r in cands]
-        try:
-            scores = self._ce.predict(pairs, convert_to_numpy=True, show_progress_bar=False)
-        except Exception:
-            return [0.0] * len(cands)
-        return scores.tolist()
+        
+        # Process in batches to save memory
+        batch_size = 10
+        all_scores = []
+        
+        for i in range(0, len(cands), batch_size):
+            batch = cands[i:i+batch_size]
+            pairs = [(query, r.get("text", "") or "") for r in batch]
+            try:
+                scores = self._ce.predict(pairs, convert_to_numpy=True, show_progress_bar=False)
+                all_scores.extend(scores.tolist())
+            except Exception as e:
+                logger.warning(f"Reranking batch failed: {e}")
+                all_scores.extend([0.0] * len(batch))
+        
+        return all_scores
 
     # --------- Cache API ---------
     def clear_cache(self):
@@ -225,6 +254,7 @@ class RAGRetriever:
     def retrieve(self, user_query: str) -> List[Dict[str, Any]]:
         intent = self._detect_intent(user_query)
         cache_key = f"{self.namespace or ''}::{_norm_q(user_query.lower().strip('?!. '))}"
+        
         if self.ENABLE_CACHE:
             cached = self._cache.get(cache_key)
             if cached is not None:
@@ -239,12 +269,14 @@ class RAGRetriever:
         # Vector fan-out
         all_cands: List[Dict[str, Any]] = []
         per_variant = max(1, self.top_k // max(1, len(variants)))
+        
         for vq in variants:
             hits = self.vector_client.query(vq, top_k=per_variant, namespace=self.namespace) or []
             all_cands.extend(hits)
 
         merged = self._dedup(all_cands)
         logger.info("Retrieved %d merged candidates", len(merged))
+        
         if not merged:
             if self.ENABLE_CACHE:
                 self._cache.set(cache_key, [])
@@ -257,13 +289,14 @@ class RAGRetriever:
         # Lexical TF-IDF
         lex_scores = self._lexical_scores(user_query, merged)
 
-        # Cross-encoder
+        # Cross-encoder (or zeros if disabled)
         rr_scores = self._rerank(user_query, merged)
         rr_scores = _minmax(rr_scores)
 
         # Section boost
         sec_boosts = [self._section_boost(r, intent) for r in merged]
 
+        # Fusion scoring
         fused = []
         for i, r in enumerate(merged):
             s = (self.W_RERANK * rr_scores[i]) + (self.W_LEX * lex_scores[i]) + (self.W_VEC * vec_scores[i]) + sec_boosts[i]
@@ -284,6 +317,7 @@ class RAGRetriever:
             return any(term.lower() in t for term in terms)
 
         have_hits = sum(1 for r in top if _contains_any(r.get("text", ""), key_terms))
+        
         if key_terms and have_hits < self.RESCUE_MIN_HITS:
             pool = [r for r in fused[self.final_k:] if _contains_any(r.get("text", ""), key_terms)]
             need = self.RESCUE_MIN_HITS - have_hits
@@ -305,4 +339,5 @@ class RAGRetriever:
 
         if self.ENABLE_CACHE:
             self._cache.set(cache_key, top)
+        
         return top

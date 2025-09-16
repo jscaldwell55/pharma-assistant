@@ -3,20 +3,62 @@ import os
 import sys
 import asyncio
 import logging
+import gc
 from flask import Flask, request, jsonify, send_from_directory, send_file
 from flask_cors import CORS
 from dotenv import load_dotenv
 from dataclasses import asdict
 
 # --- CRITICAL: This makes imports from core_logic work ---
-# This adds the parent 'backend' directory to the Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-# ---------------------------------------------------------
 
-# Load environment variables from a .env file (for API keys, etc.)
+# Load environment variables
 load_dotenv() 
 
-# --- Import your core application logic ---
+# --- PRELOAD MODELS BEFORE IMPORTS ---
+# This ensures models are loaded once at startup, not during request processing
+def preload_models():
+    """Preload all ML models at startup to avoid timeout during requests"""
+    import logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger("preloader")
+    
+    logger.info("=== PRELOADING MODELS AT STARTUP ===")
+    
+    # Force garbage collection before loading
+    gc.collect()
+    
+    # 1. Load the embedding model for RAG (largest, most important)
+    logger.info("Loading embedding model for RAG...")
+    try:
+        from sentence_transformers import SentenceTransformer
+        embed_model = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+        # Use the smaller model to save memory
+        model = SentenceTransformer(embed_model)
+        logger.info(f"✓ Loaded embedding model: {embed_model}")
+    except Exception as e:
+        logger.error(f"Failed to load embedding model: {e}")
+    
+    # 2. Skip the cross-encoder if memory is tight
+    if os.getenv("SKIP_RERANKER", "false").lower() != "true":
+        try:
+            from sentence_transformers import CrossEncoder
+            reranker_model = os.getenv("RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")
+            reranker = CrossEncoder(reranker_model)
+            logger.info(f"✓ Loaded reranker: {reranker_model}")
+        except Exception as e:
+            logger.warning(f"Could not load reranker (will use lexical scoring only): {e}")
+            os.environ["SKIP_RERANKER"] = "true"
+    
+    # 3. Force another garbage collection
+    gc.collect()
+    
+    logger.info("=== MODEL PRELOADING COMPLETE ===")
+
+# Run preloading immediately
+preload_models()
+
+# Now import your core logic (models should already be cached)
 from core_logic.pinecone_vector import PineconeVectorClient
 from core_logic.rag import RAGRetriever
 from core_logic.conversational_agent import ConversationalAgent
@@ -27,18 +69,24 @@ logger = logging.getLogger("api_server")
 
 app = Flask(__name__, static_folder='../../static')
 
-# Configure CORS with specific origins
+# Configure CORS
 CORS(app, origins=[
-    "chrome-extension://*",  # For browser extension
-    "https://pharma-assistant-api.onrender.com",  # Your specific Render domain
-    "http://localhost:*",  # For local development
-    "http://127.0.0.1:*",  # For local development
+    "chrome-extension://*",
+    "https://pharma-assistant-api.onrender.com",
+    "http://localhost:*",
+    "http://127.0.0.1:*",
 ])
 
+# === SINGLETON INITIALIZATION WITH ERROR HANDLING ===
+agent = None
 
-# === SINGLETON INITIALIZATION LOGIC ===
 def build_agent_singleton():
     """Build the conversational agent with all components"""
+    global agent
+    
+    if agent is not None:
+        return agent
+        
     logger.info("Initializing ConversationalAgent singleton...")
     
     try:
@@ -51,7 +99,7 @@ def build_agent_singleton():
         )
         logger.info("Vector client initialized for index: %s", vec.index_name)
         
-        # Build retrieval pipeline with knowledge bridge
+        # Build retrieval pipeline
         base_retriever = RAGRetriever(vector_client=vec)
         knowledge_bridge = PharmaceuticalKnowledgeBridge()
         enhanced_retriever = EnhancedRAGRetriever(base_retriever, knowledge_bridge)
@@ -59,23 +107,39 @@ def build_agent_singleton():
         # Create agent
         agent = ConversationalAgent(retriever=enhanced_retriever)
         logger.info("ConversationalAgent singleton created successfully.")
+        
+        # Force garbage collection after initialization
+        gc.collect()
+        
         return agent
         
     except Exception as e:
         logger.error(f"Failed to initialize agent: {e}", exc_info=True)
-        raise
+        # Don't raise - allow server to start even if initialization fails
+        return None
 
-# --- CRITICAL CHANGE: Initialize the agent ONCE when the app starts ---
-logger.info("Initializing global agent at startup...")
-agent = build_agent_singleton()
-logger.info("Global agent initialized and ready for requests.")
+# Initialize on first request instead of at startup
+# This gives more time for model preloading
+@app.before_first_request
+def initialize_agent():
+    """Initialize agent on first request"""
+    global agent
+    if agent is None:
+        agent = build_agent_singleton()
+
+# === HEALTH CHECK (doesn't require agent) ===
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """Health check endpoint for monitoring"""
+    global agent
+    status = 'ready' if agent is not None else 'initializing'
+    return jsonify({'status': 'healthy', 'service': 'pharma-assistant', 'agent_status': status}), 200
 
 # === STATIC FILE ROUTES ===
 @app.route('/')
 def serve_index():
     """Serve the main chat interface"""
     try:
-        # Get the absolute path to the static directory
         static_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'static')
         index_path = os.path.join(static_dir, 'index.html')
         
@@ -90,7 +154,7 @@ def serve_index():
 
 @app.route('/static/<path:filename>')
 def serve_static(filename):
-    """Serve static files (CSS, JS, etc.)"""
+    """Serve static files"""
     try:
         static_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'static')
         return send_from_directory(static_dir, filename)
@@ -99,18 +163,17 @@ def serve_static(filename):
         return jsonify({'error': 'File not found'}), 404
 
 # === API ENDPOINTS ===
-@app.route('/api/health', methods=['GET'])
-def health_check():
-    """Health check endpoint for monitoring"""
-    return jsonify({'status': 'healthy', 'service': 'pharma-assistant'}), 200
-
 @app.route('/api/rewrite', methods=['POST'])
 def handle_rewrite():
-    """
-    Original endpoint for browser extension compatibility.
-    """
+    """Original endpoint for browser extension compatibility"""
+    global agent
+    
+    # Initialize agent if needed
     if agent is None:
-        return jsonify({'error': 'Service is not ready, initialization failed'}), 503
+        agent = build_agent_singleton()
+        
+    if agent is None:
+        return jsonify({'error': 'Service is initializing, please try again in a moment'}), 503
     
     data = request.get_json()
     if not data or 'text' not in data:
@@ -119,32 +182,48 @@ def handle_rewrite():
     user_query = data['text']
     conversation_history = data.get('history', [])
 
-    logger.info(f"Received query: '{user_query[:100]}...' with {len(conversation_history)} turns in history.")
+    logger.info(f"Received query: '{user_query[:100]}...' with {len(conversation_history)} turns")
 
     try:
-        # Run the async handler
+        # Run with timeout to prevent hanging
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        decision = loop.run_until_complete(agent.handle(
-            user_query=user_query,
-            conversation_history=conversation_history
-        ))
+        
+        async def run_with_timeout():
+            return await asyncio.wait_for(
+                agent.handle(
+                    user_query=user_query,
+                    conversation_history=conversation_history
+                ),
+                timeout=30.0  # 30 second timeout
+            )
+        
+        decision = loop.run_until_complete(run_with_timeout())
         loop.close()
         
-        # Return just the response text for browser extension compatibility
+        # Force garbage collection after processing
+        gc.collect()
+        
         return jsonify({'rewritten_text': decision.response_text})
 
+    except asyncio.TimeoutError:
+        logger.error("Request timed out after 30 seconds")
+        return jsonify({'error': 'Request timed out, please try again'}), 504
     except Exception as e:
         logger.error(f"Error handling request: {e}", exc_info=True)
-        return jsonify({'error': 'An internal server error occurred.'}), 500
+        return jsonify({'error': 'An internal server error occurred'}), 500
 
 @app.route('/api/chat', methods=['POST'])
 def handle_chat():
-    """
-    Enhanced endpoint for the web UI.
-    """
+    """Enhanced endpoint for web UI"""
+    global agent
+    
+    # Initialize agent if needed
     if agent is None:
-        return jsonify({'error': 'Service is not ready, initialization failed'}), 503
+        agent = build_agent_singleton()
+        
+    if agent is None:
+        return jsonify({'error': 'Service is initializing, please try again in a moment'}), 503
     
     data = request.get_json()
     if not data or 'text' not in data:
@@ -153,28 +232,39 @@ def handle_chat():
     user_query = data['text']
     conversation_history = data.get('history', [])
 
-    logger.info(f"Received query: '{user_query[:100]}...' with {len(conversation_history)} turns in history.")
+    logger.info(f"Received chat query: '{user_query[:100]}...'")
 
     try:
-        # Run the async handler
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        decision = loop.run_until_complete(agent.handle(
-            user_query=user_query,
-            conversation_history=conversation_history
-        ))
+        
+        async def run_with_timeout():
+            return await asyncio.wait_for(
+                agent.handle(
+                    user_query=user_query,
+                    conversation_history=conversation_history
+                ),
+                timeout=30.0
+            )
+        
+        decision = loop.run_until_complete(run_with_timeout())
         loop.close()
         
-        # Return the full decision object as a dictionary
+        # Force garbage collection
+        gc.collect()
+        
         return jsonify(asdict(decision))
 
+    except asyncio.TimeoutError:
+        logger.error("Request timed out after 30 seconds")
+        return jsonify({'error': 'Request timed out'}), 504
     except Exception as e:
-        logger.error(f"Error handling request: {e}", exc_info=True)
-        return jsonify({'error': 'An internal server error occurred.'}), 500
+        logger.error(f"Error handling chat: {e}", exc_info=True)
+        return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/clear-cache', methods=['POST'])
 def clear_cache():
-    """Clear the agent's cache (admin endpoint)"""
+    """Clear the agent's cache"""
     global agent
     
     if agent is None:
@@ -185,6 +275,9 @@ def clear_cache():
         if hasattr(agent.retriever, 'clear_cache'):
             agent.retriever.clear_cache()
         
+        # Force garbage collection
+        gc.collect()
+        
         logger.info("Cache cleared successfully")
         return jsonify({'success': True, 'message': 'Cache cleared'})
     except Exception as e:
@@ -194,17 +287,14 @@ def clear_cache():
 # === ERROR HANDLERS ===
 @app.errorhandler(404)
 def not_found(error):
-    """Handle 404 errors"""
     return jsonify({'error': 'Endpoint not found'}), 404
 
 @app.errorhandler(500)
 def internal_error(error):
-    """Handle 500 errors"""
     logger.error(f"Internal server error: {error}", exc_info=True)
     return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
-    # Get port from environment variable (Render sets this)
     port = int(os.environ.get('PORT', 10000))
     
     # Check for required environment variables
@@ -213,7 +303,6 @@ if __name__ == '__main__':
     
     if missing_vars:
         logger.warning(f"Missing environment variables: {missing_vars}")
-        logger.warning("The service will fail when trying to process requests")
     
-    # Run the Flask app
+    # Run with Gunicorn in production, Flask dev server locally
     app.run(host='0.0.0.0', port=port, debug=False)
