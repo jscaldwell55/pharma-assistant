@@ -1,4 +1,3 @@
-# backend/core_logic/build_index.py
 #!/usr/bin/env python3
 """
 Build Pinecone index from generated chunks.
@@ -61,7 +60,7 @@ class PineconeIndexBuilder:
         api_key: str = None,
         index_name: str = "pharma-assistant",
         environment: str = "us-east-1",
-        embedding_model_name: str = "sentence-transformers/all-mpnet-base-v2"
+        embedding_model_name: str = None  # Changed: Now defaults to None
     ):
         self.api_key = api_key or os.getenv("PINECONE_API_KEY")
         if not self.api_key:
@@ -74,17 +73,26 @@ class PineconeIndexBuilder:
         
         self.index_name = index_name
         self.environment = environment
-        self.namespace = os.getenv("PINECONE_NAMESPACE", "")
+        self.namespace = os.getenv("PINECONE_NAMESPACE", "lilly")  # Using your namespace
         
         # Initialize Pinecone
         logger.info(f"Connecting to Pinecone...")
         self.pc = Pinecone(api_key=self.api_key)
+        
+        # Use environment variable or default to small model for memory efficiency
+        if embedding_model_name is None:
+            embedding_model_name = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
         
         # Initialize embedding model
         logger.info(f"Loading embedding model: {embedding_model_name}")
         self.embedder = SentenceTransformer(embedding_model_name)
         self.embedding_dim = self.embedder.get_sentence_embedding_dimension()
         logger.info(f"Embedding dimension: {self.embedding_dim}")
+        
+        # Warn if using large model
+        if "mpnet" in embedding_model_name.lower():
+            logger.warning("⚠️  Using large model (all-mpnet-base-v2). This requires more memory!")
+            logger.warning("   Consider using --embedding-model 'sentence-transformers/all-MiniLM-L6-v2' for lower memory usage")
     
     def create_index(self, recreate: bool = False) -> None:
         """Create Pinecone index if it doesn't exist"""
@@ -102,9 +110,23 @@ class PineconeIndexBuilder:
             else:
                 logger.info(f"Index {self.index_name} already exists, using it")
                 self.index = self.pc.Index(self.index_name)
+                
+                # Check dimension compatibility
+                try:
+                    stats = self.index.describe_index_stats()
+                    if stats.get('dimension') and stats['dimension'] != self.embedding_dim:
+                        logger.error(f"❌ Dimension mismatch!")
+                        logger.error(f"   Index has {stats['dimension']} dimensions")
+                        logger.error(f"   Model creates {self.embedding_dim} dimensions")
+                        logger.error(f"   Please either:")
+                        logger.error(f"   1. Use --recreate flag to rebuild index with new model")
+                        logger.error(f"   2. Use the original embedding model that matches {stats['dimension']} dimensions")
+                        sys.exit(1)
+                except:
+                    pass  # If we can't check, proceed anyway
                 return
         
-        logger.info(f"Creating new index: {self.index_name}")
+        logger.info(f"Creating new index: {self.index_name} with {self.embedding_dim} dimensions")
         try:
             self.pc.create_index(
                 name=self.index_name,
@@ -124,7 +146,7 @@ class PineconeIndexBuilder:
         time.sleep(10)
         
         self.index = self.pc.Index(self.index_name)
-        logger.info(f"Index {self.index_name} created successfully")
+        logger.info(f"Index {self.index_name} created successfully with {self.embedding_dim} dimensions")
     
     def load_chunks(self, chunks_file: str) -> List[Dict[str, Any]]:
         """Load chunks from JSONL file"""
@@ -132,7 +154,20 @@ class PineconeIndexBuilder:
         chunks_path = Path(chunks_file)
         
         if not chunks_path.exists():
-            raise FileNotFoundError(f"Chunks file not found: {chunks_file}")
+            # Try common locations
+            alternative_paths = [
+                Path("backend/data/chunks/chunks.jsonl"),
+                Path("data/chunks/chunks.jsonl"),
+                Path("backend/data/chunks.jsonl"),
+                Path("data/chunks.jsonl"),
+            ]
+            for alt_path in alternative_paths:
+                if alt_path.exists():
+                    chunks_path = alt_path
+                    logger.info(f"Found chunks at: {chunks_path}")
+                    break
+            else:
+                raise FileNotFoundError(f"Chunks file not found: {chunks_file}")
         
         with open(chunks_path, 'r', encoding='utf-8') as f:
             for line_num, line in enumerate(f, 1):
@@ -146,7 +181,7 @@ class PineconeIndexBuilder:
                 except json.JSONDecodeError as e:
                     logger.warning(f"Line {line_num}: Invalid JSON, skipping: {e}")
         
-        logger.info(f"Loaded {len(chunks)} valid chunks from {chunks_file}")
+        logger.info(f"Loaded {len(chunks)} valid chunks from {chunks_path}")
         return chunks
     
     def prepare_vectors(self, chunks: List[Dict[str, Any]], batch_size: int = 32) -> List[Dict[str, Any]]:
@@ -264,17 +299,17 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Build from chunks file (most common)
+  # Build with default small model (recommended for low memory)
   python build_index.py --chunks data/chunks.jsonl
   
-  # Recreate index from scratch
-  python build_index.py --chunks data/chunks.jsonl --recreate
+  # Explicitly use small model and recreate
+  python build_index.py --chunks data/chunks.jsonl --embedding-model "sentence-transformers/all-MiniLM-L6-v2" --recreate
+  
+  # Use large model (requires more memory)
+  python build_index.py --chunks data/chunks.jsonl --embedding-model "sentence-transformers/all-mpnet-base-v2"
   
   # Test with a custom query
   python build_index.py --chunks data/chunks.jsonl --test-query "What is the dosage?"
-  
-  # Use specific API key
-  python build_index.py --chunks data/chunks.jsonl --api-key your-key-here
         """
     )
     
@@ -310,13 +345,13 @@ Examples:
     )
     parser.add_argument(
         "--embedding-model",
-        default="sentence-transformers/all-mpnet-base-v2",
-        help="Embedding model to use"
+        default=None,  # Will use environment variable or small model default
+        help="Embedding model to use (default: from EMBEDDING_MODEL env or all-MiniLM-L6-v2)"
     )
     parser.add_argument(
         "--namespace",
-        default=os.getenv("PINECONE_NAMESPACE", ""),
-        help="Namespace for vectors (optional)"
+        default=os.getenv("PINECONE_NAMESPACE", "lilly"),
+        help="Namespace for vectors (default: lilly)"
     )
     
     args = parser.parse_args()
@@ -380,6 +415,7 @@ Examples:
         if builder.namespace:
             logger.info(f"Namespace: {builder.namespace}")
         logger.info(f"Vectors: {len(vectors)}")
+        logger.info(f"Embedding model: {builder.embedder.get_sentence_embedding_dimension()} dimensions")
         logger.info("Your index is ready to use!")
         
     except Exception as e:
