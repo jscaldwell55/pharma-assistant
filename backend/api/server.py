@@ -35,8 +35,6 @@ CORS(app, origins=[
     "http://127.0.0.1:*",  # For local development
 ])
 
-# Global agent variable
-agent = None
 
 # === SINGLETON INITIALIZATION LOGIC ===
 def build_agent_singleton():
@@ -66,6 +64,11 @@ def build_agent_singleton():
     except Exception as e:
         logger.error(f"Failed to initialize agent: {e}", exc_info=True)
         raise
+
+# --- CRITICAL CHANGE: Initialize the agent ONCE when the app starts ---
+logger.info("Initializing global agent at startup...")
+agent = build_agent_singleton()
+logger.info("Global agent initialized and ready for requests.")
 
 # === STATIC FILE ROUTES ===
 @app.route('/')
@@ -104,19 +107,10 @@ def health_check():
 @app.route('/api/rewrite', methods=['POST'])
 def handle_rewrite():
     """
-    Original endpoint for browser extension compatibility
-    Returns just the response text for backward compatibility
+    Original endpoint for browser extension compatibility.
     """
-    global agent
-    
-    try:
-        # Lazy load agent on first request
-        if agent is None:
-            logger.info("Loading agent on first request...")
-            agent = build_agent_singleton()
-    except Exception as e:
-        logger.error(f"Failed to initialize agent: {e}", exc_info=True)
-        return jsonify({'error': 'Service initialization failed'}), 503
+    if agent is None:
+        return jsonify({'error': 'Service is not ready, initialization failed'}), 503
     
     data = request.get_json()
     if not data or 'text' not in data:
@@ -147,19 +141,10 @@ def handle_rewrite():
 @app.route('/api/chat', methods=['POST'])
 def handle_chat():
     """
-    Enhanced endpoint that returns full decision object
-    Used by the web UI for rich interactions
+    Enhanced endpoint for the web UI.
     """
-    global agent
-    
-    try:
-        # Lazy load agent on first request
-        if agent is None:
-            logger.info("Loading agent on first request...")
-            agent = build_agent_singleton()
-    except Exception as e:
-        logger.error(f"Failed to initialize agent: {e}", exc_info=True)
-        return jsonify({'error': 'Service initialization failed'}), 503
+    if agent is None:
+        return jsonify({'error': 'Service is not ready, initialization failed'}), 503
     
     data = request.get_json()
     if not data or 'text' not in data:

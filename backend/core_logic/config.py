@@ -7,8 +7,8 @@ def _getenv(name: str, default: str) -> str:
 
 @dataclass(frozen=True)
 class Models:
-    # Larger embedding model (768d) for stronger retrieval - works great with 2GB RAM
-    EMBEDDING_MODEL: str = _getenv("EMBEDDING_MODEL", "sentence-transformers/all-mpnet-base-v2")
+    # Consolidated embedding model for both RAG and Guardrails to save memory
+    EMBEDDING_MODEL: str = _getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
     # Cross-encoder reranker for better result ranking
     RERANKER_MODEL: str = _getenv("RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")
     # Zero-shot classifier for guard (keep disabled to save memory)
