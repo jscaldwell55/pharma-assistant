@@ -19,7 +19,8 @@ try:
 except Exception:
     SentenceTransformer = None
 
-DEFAULT_EMBED_MODEL = os.getenv("EMBED_MODEL", "sentence-transformers/all-mpnet-base-v2")
+# CRITICAL FIX: Use the environment variable, not the hardcoded large model
+DEFAULT_EMBED_MODEL = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 
 @dataclass
 class PineconeVectorClient:
@@ -27,7 +28,8 @@ class PineconeVectorClient:
     environment: Optional[str] = os.getenv("PINECONE_ENVIRONMENT", "us-east-1")
     api_key: Optional[str] = os.getenv("PINECONE_API_KEY")
     namespace: Optional[str] = os.getenv("PINECONE_NAMESPACE") or None
-    embed_model_name: str = DEFAULT_EMBED_MODEL
+    # CRITICAL: Don't override with large model here!
+    embed_model_name: str = field(default_factory=lambda: os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"))
 
     _pc: Optional[Any] = field(default=None, init=False, repr=False)
     _index: Optional[Any] = field(default=None, init=False, repr=False)
@@ -45,18 +47,22 @@ class PineconeVectorClient:
             raise RuntimeError("index_name is required.")
 
         logger.info(
-            "Initializing vector client index=%s ns=%s region=%s",
-            self.index_name, self.namespace or "", self.environment,
+            "Initializing vector client index=%s ns=%s region=%s model=%s",
+            self.index_name, self.namespace or "", self.environment, self.embed_model_name,
         )
         self._pc = Pinecone(api_key=self.api_key)
         # Assume index exists (create via build_index.py). This is fastest in hot path.
         self._index = self._pc.Index(self.index_name)
 
-        # With 2GB RAM, load embedder immediately
+        # Load the embedder - will use the model from environment variable
         if SentenceTransformer is None:
             raise RuntimeError("sentence-transformers not installed for embedding model.")
-        self._embedder = SentenceTransformer(self.embed_model_name)
-        logger.info("Loaded embedder: %s", self.embed_model_name)
+        
+        # Use the model from environment variable
+        model_to_load = self.embed_model_name or DEFAULT_EMBED_MODEL
+        logger.info("Loading embedder model: %s", model_to_load)
+        self._embedder = SentenceTransformer(model_to_load)
+        logger.info("Loaded embedder: %s", model_to_load)
 
     def query(self, text: str, top_k: int = 10, namespace: Optional[str] = None) -> List[Dict[str, Any]]:
         """
