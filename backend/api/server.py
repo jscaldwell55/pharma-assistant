@@ -211,9 +211,8 @@ def test_modal():
     
     try:
         # Test Modal service
-        response = requests.post(
+        response = requests.get(
             f"{modal_endpoint}/get_info",
-            json={},
             timeout=10
         )
         response.raise_for_status()

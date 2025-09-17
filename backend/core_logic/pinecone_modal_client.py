@@ -32,9 +32,11 @@ class ModalEmbedder:
     def encode(self, text: str, normalize_embeddings: bool = True) -> List[float]:
         """Embed a single text using Modal service"""
         try:
-            # Call Modal endpoint
-            url = f"{self.modal_endpoint}/embed_single"
-            headers = {}
+            # Construct the full URL properly
+            base_url = self.modal_endpoint.rstrip('/')  # Remove trailing slash if present
+            url = f"{base_url}/embed_single"
+            
+            headers = {"Content-Type": "application/json"}
             if self.api_key:
                 headers["Authorization"] = f"Bearer {self.api_key}"
             
@@ -60,8 +62,10 @@ class ModalEmbedder:
     def encode_batch(self, texts: List[str], normalize_embeddings: bool = True) -> List[List[float]]:
         """Embed multiple texts using Modal service"""
         try:
-            url = f"{self.modal_endpoint}/embed_batch"
-            headers = {}
+            base_url = self.modal_endpoint.rstrip('/')
+            url = f"{base_url}/embed_batch"
+            
+            headers = {"Content-Type": "application/json"}
             if self.api_key:
                 headers["Authorization"] = f"Bearer {self.api_key}"
             
@@ -86,8 +90,10 @@ class ModalEmbedder:
     def get_sentence_embedding_dimension(self) -> int:
         """Get embedding dimension from Modal service"""
         try:
-            url = f"{self.modal_endpoint}/get_info"
-            response = requests.post(url, json={}, timeout=10)
+            base_url = self.modal_endpoint.rstrip('/')
+            url = f"{base_url}/get_info"
+
+            response = requests.get(url, timeout=10)
             response.raise_for_status()
             info = response.json()
             return info.get("dimension", 384)  # Default to 384 if not found
@@ -173,3 +179,46 @@ class PineconeModalClient:
         
         logger.debug(f"Found {len(out)} matches")
         return out
+
+    def upsert(self, vectors: List[Dict[str, Any]], namespace: Optional[str] = None) -> Dict[str, Any]:
+        """Upsert vectors to Pinecone"""
+        ns = namespace if namespace is not None else self.namespace
+
+        # Convert texts to embeddings if needed
+        processed_vectors = []
+        for vector in vectors:
+            if "values" not in vector and "text" in vector:
+                # Need to embed the text
+                embedding = self._embedder.encode(vector["text"], normalize_embeddings=True)
+                vector["values"] = embedding
+            processed_vectors.append(vector)
+
+        return self._index.upsert(
+            vectors=processed_vectors,
+            namespace=ns or ""
+        )
+
+    def delete(self, ids: List[str], namespace: Optional[str] = None) -> Dict[str, Any]:
+        """Delete vectors from Pinecone"""
+        ns = namespace if namespace is not None else self.namespace
+        return self._index.delete(ids=ids, namespace=ns or "")
+
+    def describe_index_stats(self) -> Dict[str, Any]:
+        """Get index statistics"""
+        return self._index.describe_index_stats()
+
+    def test_connection(self) -> bool:
+        """Test both Pinecone and Modal connections"""
+        try:
+            # Test Pinecone
+            stats = self.describe_index_stats()
+            logger.info(f"Pinecone connection OK. Total vectors: {stats.get('total_vector_count', 0)}")
+
+            # Test Modal
+            dimension = self._embedder.get_sentence_embedding_dimension()
+            logger.info(f"Modal connection OK. Embedding dimension: {dimension}")
+
+            return True
+        except Exception as e:
+            logger.error(f"Connection test failed: {e}")
+            return False
