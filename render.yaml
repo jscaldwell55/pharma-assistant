@@ -2,7 +2,10 @@ services:
   - type: web
     name: pharma-assistant
     runtime: python
-    buildCommand: "pip install -r requirements.txt && python -m nltk.downloader punkt maxent_ne_chunker words averaged_perceptron_tagger"
+    buildCommand: |
+      pip install -r requirements.txt && \
+      python -c "from sentence_transformers import SentenceTransformer; print('Downloading model...'); SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2'); print('Model cached')" && \
+      python -m nltk.downloader punkt maxent_ne_chunker words averaged_perceptron_tagger
     startCommand: "gunicorn -c gunicorn_config.py backend.api.server:app"
     envVars:
       - key: PYTHON_VERSION
