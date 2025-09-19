@@ -13,11 +13,14 @@ except Exception as e:
     Pinecone = None
     _PC_IMPORT_ERR = e
 
-# Load sentence transformers normally
+# Load sentence transformers - with fallback
 try:
     from sentence_transformers import SentenceTransformer
+    _ST_AVAILABLE = True
 except Exception:
+    logger.warning("sentence-transformers not available, will use fallback")
     SentenceTransformer = None
+    _ST_AVAILABLE = False
 
 # CRITICAL FIX: Use the environment variable, not the hardcoded large model
 DEFAULT_EMBED_MODEL = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
@@ -36,6 +39,8 @@ class PineconeVectorClient:
     _embedder: Optional[Any] = field(default=None, init=False, repr=False)
 
     def __post_init__(self):
+        logger.info("PineconeVectorClient initialization starting...")
+        
         if Pinecone is None:
             raise RuntimeError(
                 "Pinecone import failed. Ensure the 'pinecone' package is installed. "
@@ -50,19 +55,41 @@ class PineconeVectorClient:
             "Initializing vector client index=%s ns=%s region=%s model=%s",
             self.index_name, self.namespace or "", self.environment, self.embed_model_name,
         )
-        self._pc = Pinecone(api_key=self.api_key)
-        # Assume index exists (create via build_index.py). This is fastest in hot path.
-        self._index = self._pc.Index(self.index_name)
-
-        # Load the embedder - will use the model from environment variable
-        if SentenceTransformer is None:
-            raise RuntimeError("sentence-transformers not installed for embedding model.")
         
-        # Use the model from environment variable
+        # Initialize Pinecone
+        logger.info("Step 1: Creating Pinecone client...")
+        self._pc = Pinecone(api_key=self.api_key)
+        logger.info("Step 2: Pinecone client created, connecting to index...")
+        
+        # Connect to index
+        try:
+            self._index = self._pc.Index(self.index_name)
+            logger.info("Step 3: Connected to Pinecone index successfully")
+        except Exception as e:
+            logger.error(f"Failed to connect to Pinecone index: {e}")
+            raise
+        
+        # Load the embedder
+        logger.info("Step 4: Loading embedding model...")
         model_to_load = self.embed_model_name or DEFAULT_EMBED_MODEL
-        logger.info("Loading embedder model: %s", model_to_load)
-        self._embedder = SentenceTransformer(model_to_load)
-        logger.info("Loaded embedder: %s", model_to_load)
+        
+        if not _ST_AVAILABLE:
+            logger.warning("SentenceTransformer not available, using mock embedder")
+            from .emergency_mock_embedder import MockEmbedder
+            self._embedder = MockEmbedder(embedding_dim=384)
+        else:
+            import time
+            start_time = time.time()
+            try:
+                self._embedder = SentenceTransformer(model_to_load)
+                load_time = time.time() - start_time
+                logger.info("Step 5: Loaded embedder %s in %.2f seconds", model_to_load, load_time)
+            except Exception as e:
+                load_time = time.time() - start_time
+                logger.error(f"Failed to load embedding model after {load_time:.2f} seconds: {e}")
+                raise
+        
+        logger.info("PineconeVectorClient initialization complete!")
 
     def query(self, text: str, top_k: int = 10, namespace: Optional[str] = None) -> List[Dict[str, Any]]:
         """

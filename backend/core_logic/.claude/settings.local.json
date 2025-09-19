@@ -1,7 +1,15 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(modal setup:*)",
+      "Read(//Users/jaycaldwell/Desktop/pharma-assistant-benchmark/backend/**)",
+      "Read(//Users/jaycaldwell/Desktop/pharma-assistant-benchmark/**)",
+      "Bash(modal token:*)",
+      "Bash(modal:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []

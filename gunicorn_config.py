@@ -7,15 +7,15 @@ bind = f"0.0.0.0:{os.environ.get('PORT', '10000')}"
 backlog = 2048
 
 # Worker processes
-# Use only 1 worker to minimize memory usage
-workers = 1
+# Use 2 workers with 2GB RAM (1GB per worker)
+workers = 2
 worker_class = 'sync'
 worker_connections = 1000
 max_requests = 100  # Restart worker after 100 requests to prevent memory leaks
 max_requests_jitter = 20
 
 # Timeout settings
-timeout = 120  # Increased to 120 seconds for model loading
+timeout = 180  # 3 minutes for model loading on first request
 graceful_timeout = 30
 keepalive = 2
 
