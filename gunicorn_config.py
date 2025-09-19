@@ -4,18 +4,17 @@ import multiprocessing
 
 # Server socket
 bind = f"0.0.0.0:{os.environ.get('PORT', '10000')}"
-backlog = 2048
+backlog = 1024  # Reduced from 2048
 
-# Worker processes
-# Use 2 workers with 2GB RAM (1GB per worker)
-workers = 2
+# Worker processes - CRITICAL: Use only 1 worker on Starter plan
+workers = 1  # Reduced from 2 - essential for memory constraints
 worker_class = 'sync'
-worker_connections = 1000
-max_requests = 100  # Restart worker after 100 requests to prevent memory leaks
-max_requests_jitter = 20
+worker_connections = 500  # Reduced from 1000
+max_requests = 50  # Reduced from 100 - restart more frequently to prevent memory leaks
+max_requests_jitter = 10  # Reduced from 20
 
-# Timeout settings
-timeout = 180  # 3 minutes for model loading on first request
+# Timeout settings - increase for model loading
+timeout = 300  # Increased from 180 for slower model loading
 graceful_timeout = 30
 keepalive = 2
 
@@ -62,6 +61,9 @@ def when_ready(server):
 def worker_init(worker):
     """Called just after a worker has initialized the application"""
     worker.log.info(f"Worker {worker.pid} initialized")
+    # Force garbage collection after init
+    import gc
+    gc.collect()
 
 def worker_int(worker):
     """Called just after a worker exited on SIGINT or SIGQUIT"""
@@ -71,9 +73,9 @@ def on_exit(server):
     """Called just before exiting"""
     server.log.info("Server shutting down")
 
-# Preload the application to share memory between workers
-# But with only 1 worker, this is less critical
-preload_app = True
+# CRITICAL: Set preload_app to False to avoid loading models in master process
+# This ensures models are loaded in the worker where they'll be used
+preload_app = False
 
 # StatsD (optional monitoring)
 statsd_host = None

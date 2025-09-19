@@ -2,11 +2,10 @@ services:
   - type: web
     name: pharma-assistant
     runtime: python
-    plan: standard  # Explicitly use standard plan with 2GB RAM
+    plan: starter  # Explicitly use starter plan
     buildCommand: |
-      pip install -r requirements.txt && \
-      python preload_models.py && \
-      python -m nltk.downloader punkt maxent_ne_chunker words averaged_perceptron_tagger
+      pip install --no-cache-dir -r requirements.txt && \
+      python preload_models.py
     startCommand: gunicorn -c gunicorn_config.py backend.api.server:app
     envVars:
       - key: PYTHON_VERSION
@@ -23,32 +22,31 @@ services:
         value: "us-east-1"
       - key: PINECONE_NAMESPACE
         value: "lilly"
-      # Model Configuration - Use small model
+      # Model Configuration - Optimized for low memory
       - key: EMBEDDING_MODEL
         value: "sentence-transformers/all-MiniLM-L6-v2"
       - key: GROUNDING_EMBED_MODEL
         value: "sentence-transformers/all-MiniLM-L6-v2"
-      # With 2GB RAM, you can enable the reranker!
+      # CRITICAL: Disable reranker for Starter plan
       - key: SKIP_RERANKER
-        value: "false"
-      - key: RERANKER_MODEL
-        value: "cross-encoder/ms-marco-MiniLM-L-6-v2"
-      # RAG Configuration
+        value: "true"
+      # RAG Configuration - Reduced for memory
       - key: RAG_TOPK
-        value: "40"
+        value: "20"
       - key: RAG_FINALK
         value: "5"
+      # Adjusted weights without reranker
       - key: RAG_W_RERANK
-        value: "0.60"
+        value: "0.0"
       - key: RAG_W_LEX
-        value: "0.25"
+        value: "0.50"
       - key: RAG_W_VEC
-        value: "0.15"
-      # Cache Configuration
+        value: "0.50"
+      # Reduced cache sizes
       - key: RAG_CACHE_MAX
-        value: "256"
+        value: "128"
       - key: ANS_CACHE_MAX
-        value: "256"
+        value: "128"
       # Model cache paths for Render
       - key: TRANSFORMERS_CACHE
         value: "/opt/render/project/.cache/huggingface"
@@ -56,6 +54,8 @@ services:
         value: "/opt/render/project/.cache/huggingface"
       - key: SENTENCE_TRANSFORMERS_HOME
         value: "/opt/render/project/.cache/torch/sentence_transformers"
+      - key: NLTK_DATA
+        value: "/opt/render/project/.cache/nltk_data"
       # Other settings
       - key: GROUNDING_AVG_THRESH
         value: "0.42"
@@ -64,4 +64,7 @@ services:
       - key: FAIR_BALANCE_ENFORCED
         value: "true"
       - key: ANTHROPIC_MODEL
-        value: "claude-3-7-sonnet-latest"
+        value: "claude-3-haiku-20240307"  # Consider using Haiku for speed/cost
+      # Timeout for workers
+      - key: WEB_CONCURRENCY
+        value: "1"
