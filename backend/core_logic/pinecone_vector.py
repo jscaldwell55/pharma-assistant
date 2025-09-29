@@ -102,7 +102,7 @@ class PineconeVectorClient:
             from .emergency_mock_embedder import MockEmbedder
             self._embedder = MockEmbedder(embedding_dim=384)
         else:
-            import time
+            
             start_time = time.time()
             try:
                 from .model_manager import model_manager

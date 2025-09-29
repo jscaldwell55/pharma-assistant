@@ -4,8 +4,9 @@ flask-cors==4.0.0
 gunicorn==21.2.0
 gevent==23.9.1
 
-# ML/NLP
-sentence-transformers==2.2.2
+# ML/NLP - Fixed versions for compatibility
+sentence-transformers==2.7.0
+huggingface-hub==0.24.5
 transformers==4.41.2
 torch==2.2.2
 scikit-learn==1.4.2
@@ -15,7 +16,6 @@ nltk==3.8.1
 
 # PDF processing
 pypdf==4.2.0
-# OR pymupdf==1.23.26  # Alternative, better for complex PDFs
 
 # Text splitting
 langchain-text-splitters==0.2.2
@@ -23,8 +23,9 @@ langchain-text-splitters==0.2.2
 # Vector DB
 pinecone-client==3.0.0
 
-# LLM
-anthropic==0.34.2
+# LLM - FIXED VERSION
+anthropic==0.26.1
+httpx==0.24.1
 
 # Utilities
 python-dotenv==1.0.0
