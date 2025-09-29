@@ -1,0 +1,45 @@
+# cloudbuild-api-only.yaml - Just build and deploy the API
+steps:
+  # Build the API container
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/pharma-assistant:latest'
+      - '.'
+
+  # Push to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/pharma-assistant:latest']
+
+  # Deploy to Cloud Run (budget-optimized)
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'pharma-assistant-api'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/pharma-assistant:latest'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--min-instances'
+      - '0'  # Scale to zero
+      - '--max-instances'
+      - '3'  # Keep low for budget
+      - '--cpu'
+      - '1'  # Minimum CPU
+      - '--memory'
+      - '1Gi'  # Minimum memory
+      - '--timeout'
+      - '60'
+      - '--set-env-vars'
+      - 'PINECONE_API_KEY=${_PINECONE_API_KEY},ANTHROPIC_API_KEY=${_ANTHROPIC_API_KEY},PINECONE_INDEX=pharma-assistant,PINECONE_NAMESPACE=${_PINECONE_NAMESPACE},EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2'
+
+substitutions:
+  _PINECONE_NAMESPACE: 'lilly'  # Or whatever namespace you're using
+
+timeout: '1200s'
