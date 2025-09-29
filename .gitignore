@@ -51,3 +51,8 @@ firebase-debug.log
 # Model cache
 .cache/
 models/google-cloud-sdk/
+
+# Google Cloud SDK
+google-cloud-sdk/
+.config/gcloud/
+.gsutil/

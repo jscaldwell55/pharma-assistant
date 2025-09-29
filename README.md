@@ -10,73 +10,9 @@ A safety-first pharmaceutical information assistant with RAG, grounding, and mul
 - **LLM**: Anthropic Claude 3.5 Sonnet
 - **Embeddings**: Sentence Transformers
 
-## Quick Start
 
-### Prerequisites
 
-1. Install required tools:
-```bash
-# Google Cloud CLI
-curl https://sdk.cloud.google.com | bash
 
-# Firebase CLI
-npm install -g firebase-tools
-
-# Python dependencies (for local development)
-pip install -r requirements.txt
-```
-
-2. Set up accounts:
-- Google Cloud Project
-- Firebase Project
-- Pinecone account
-- Anthropic API key
-
-### Configuration
-
-1. Copy `.env.example` to `.env`:
-```bash
-cp .env.example .env
-```
-
-2. Fill in your API keys in `.env`:
-- `PINECONE_API_KEY`: Your Pinecone API key
-- `ANTHROPIC_API_KEY`: Your Anthropic API key
-- Update project IDs and other settings as needed
-
-### Deployment
-
-One-command deployment:
-```bash
-chmod +x scripts/deploy.sh
-./scripts/deploy.sh
-```
-
-This will:
-1. Enable required GCP APIs
-2. Create/update secrets in Secret Manager
-3. Build and push Docker container
-4. Deploy to Cloud Run
-5. Deploy frontend to Firebase Hosting
-
-### Local Development
-
-1. Run backend locally:
-```bash
-python backend/api/server.py
-```
-
-2. Run frontend locally:
-```bash
-cd frontend
-python -m http.server 3000
-```
-
-3. Or use Docker:
-```bash
-./scripts/build_docker.sh
-docker run -p 8080:8080 --env-file .env pharma-assistant:local
-```
 
 ## Project Structure
 
@@ -111,7 +47,6 @@ pharma-assistant/
 - **Cold start**: ~12-15 seconds (models cached in Docker)
 - **Warm requests**: 2-4 seconds
 - **Auto-scaling**: 0-10 instances
-- **Cost**: $1-15/month depending on usage
 
 ## Configuration Options
 
@@ -131,37 +66,6 @@ pharma-assistant/
 - `GROUNDING_AVG_THRESH`: Grounding threshold (0-1)
 - `ADVICE_THRESHOLD`: Medical advice detection threshold
 
-## API Endpoints
-
-### Health Check
-```bash
-curl https://your-service.run.app/api/health
-```
-
-### Chat
-```bash
-curl -X POST https://your-service.run.app/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{"text": "What are the side effects?", "history": []}'
-```
-
-### Clear Cache
-```bash
-curl -X POST https://your-service.run.app/api/clear-cache
-```
-
-## Monitoring
-
-View logs:
-```bash
-gcloud logs tail --project=$GCP_PROJECT_ID \
-  --filter="resource.type=cloud_run_revision"
-```
-
-View metrics:
-```bash
-gcloud monitoring dashboards list --project=$GCP_PROJECT_ID
-```
 
 ## Troubleshooting
 
@@ -188,6 +92,3 @@ gcloud monitoring dashboards list --project=$GCP_PROJECT_ID
 - Input sanitization and validation
 - PHI/PII detection and blocking
 
-## License
-
-Proprietary - All rights reserved
