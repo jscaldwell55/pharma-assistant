@@ -50,4 +50,4 @@ firebase-debug.log
 
 # Model cache
 .cache/
-models/
+models/google-cloud-sdk/
